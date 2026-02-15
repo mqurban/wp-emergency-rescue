@@ -1,0 +1,491 @@
+<?php
+/**
+ * Plugin Name: Emergency Rescue
+ * Description: A must-use plugin to recover from fatal errors by renaming plugins/themes via a secret URL.
+ * Version: 1.1.0
+ * Author: Muhammad Qurban
+ * Author URI: https://mqurban.com
+ * License: GPLv2 or later
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+class WP_Emergency_Rescue {
+
+    private $option_name = 'wper_secret_key';
+    private $param_name  = 'rescue_key';
+    private $dismiss_option = 'wper_notice_dismissed';
+
+    public function __construct() {
+        // Step 1: Initialize
+        // Check for rescue mode immediately (for mu-plugin support)
+        $this->check_rescue_mode();
+        
+        // Step 2: Hooks for normal operation (generating key, showing notice)
+        // We use admin_init to ensure all WP functions (like pluggable.php) are loaded
+        add_action( 'admin_init', array( $this, 'generate_key_if_missing' ) );
+        add_action( 'admin_init', array( $this, 'handle_admin_actions' ) ); // Handle dismissal and settings save
+        add_action( 'admin_notices', array( $this, 'show_secret_key' ) );
+        add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
+    }
+
+    /**
+     * Generate a secret key if one doesn't exist.
+     * Hooked to admin_init to ensure random functions are available.
+     */
+    public function generate_key_if_missing() {
+        if ( ! get_option( $this->option_name ) ) {
+            // wp_generate_password is in pluggable.php, which is loaded by now
+            $key = wp_generate_password( 32, false );
+            update_option( $this->option_name, $key );
+        }
+    }
+
+    /**
+     * Register a submenu page under Tools.
+     */
+    public function register_menu_page() {
+        add_management_page(
+            'Emergency Rescue',
+            'Emergency Rescue',
+            'manage_options',
+            'wp-emergency-rescue',
+            array( $this, 'render_settings_page' )
+        );
+    }
+
+    /**
+     * Render the settings page in WP Admin.
+     */
+    public function render_settings_page() {
+        $key = get_option( $this->option_name );
+        $url = home_url( '/?' . $this->param_name . '=' . $key );
+        ?>
+        <div class="wrap">
+            <h1>🚑 Emergency Rescue Settings</h1>
+            
+            <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+                <h2>Your Emergency Rescue URL</h2>
+                <p>Use this URL to access the recovery interface if your site crashes and you cannot access the admin panel.</p>
+                <p>
+                    <input type="text" class="large-text code" value="<?php echo esc_url( $url ); ?>" readonly onclick="this.select();">
+                </p>
+                <p class="description"><strong>Tip:</strong> Bookmark this URL now.</p>
+            </div>
+
+            <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+                <h2>Custom Configuration</h2>
+                <form method="post" action="">
+                    <?php wp_nonce_field( 'wper_save_settings', 'wper_nonce' ); ?>
+                    <input type="hidden" name="action" value="wper_save_settings">
+                    
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><label for="custom_secret_key">Secret Key</label></th>
+                            <td>
+                                <input name="custom_secret_key" type="text" id="custom_secret_key" value="<?php echo esc_attr( $key ); ?>" class="regular-text code">
+                                <p class="description">You can change this key to something memorable (e.g., a custom password). <br><strong>Warning:</strong> Changing this invalidates the old Rescue URL.</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <?php submit_button( 'Save Changes' ); ?>
+                </form>
+            </div>
+
+            <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+                <h2>Activity Logs</h2>
+                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <form method="get" action="">
+                        <input type="hidden" name="page" value="wp-emergency-rescue">
+                        <label for="wper_log_limit">Show last: </label>
+                        <select name="limit" id="wper_log_limit" onchange="this.form.submit()">
+                            <?php 
+                            $limit = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : 10;
+                            $options = array( 10, 25, 50, 100 );
+                            foreach ( $options as $opt ) {
+                                echo '<option value="' . $opt . '" ' . selected( $limit, $opt, false ) . '>' . $opt . ' entries</option>';
+                            }
+                            ?>
+                        </select>
+                    </form>
+                    
+                    <form method="post" action="" onsubmit="return confirm('Are you sure you want to clear all logs?');">
+                        <?php wp_nonce_field( 'wper_clear_logs', 'wper_nonce' ); ?>
+                        <input type="hidden" name="action" value="wper_clear_logs">
+                        <?php submit_button( 'Clear Logs', 'delete', 'submit', false, array( 'style' => 'margin:0;' ) ); ?>
+                    </form>
+                </div>
+
+                <table class="widefat striped">
+                    <thead>
+                        <tr>
+                            <th style="width: 180px;">Time</th>
+                            <th>Action / Message</th>
+                            <th style="width: 120px;">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $logs = $this->get_logs( $limit );
+                        if ( empty( $logs ) ) : ?>
+                            <tr><td colspan="3">No activity logs found.</td></tr>
+                        <?php else : ?>
+                            <?php foreach ( $logs as $log ) : 
+                                // Basic parsing: "DATE TIME - Message - IP: IP"
+                                $parts = explode( ' - ', $log );
+                                if ( count( $parts ) >= 3 ) {
+                                    $time = array_shift( $parts );
+                                    $ip_part = array_pop( $parts );
+                                    $ip = str_replace( 'IP: ', '', $ip_part );
+                                    $message = implode( ' - ', $parts );
+                                } else {
+                                    $time = '';
+                                    $message = $log;
+                                    $ip = '';
+                                }
+                            ?>
+                                <tr>
+                                    <td><?php echo esc_html( $time ); ?></td>
+                                    <td><?php echo esc_html( $message ); ?></td>
+                                    <td><?php echo esc_html( $ip ); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
+     * Handle admin actions (Settings save, Notice dismissal).
+     */
+    public function handle_admin_actions() {
+        // Handle Notice Dismissal
+        if ( isset( $_GET['wper_dismiss'] ) && check_admin_referer( 'wper_dismiss_notice' ) ) {
+            update_user_meta( get_current_user_id(), $this->dismiss_option, true );
+            wp_redirect( remove_query_arg( array( 'wper_dismiss', '_wpnonce' ) ) );
+            exit;
+        }
+
+        // Handle Settings Save
+        if ( isset( $_POST['action'] ) && $_POST['action'] === 'wper_save_settings' ) {
+            if ( ! current_user_can( 'manage_options' ) ) {
+                return;
+            }
+            
+            if ( ! isset( $_POST['wper_nonce'] ) || ! wp_verify_nonce( $_POST['wper_nonce'], 'wper_save_settings' ) ) {
+                return;
+            }
+
+            if ( ! empty( $_POST['custom_secret_key'] ) ) {
+                // Sanitize: Allow alphanumeric and common safe chars
+                $new_key = sanitize_text_field( $_POST['custom_secret_key'] );
+                // Ensure no spaces
+                $new_key = str_replace( ' ', '', $new_key );
+                
+                if ( ! empty( $new_key ) ) {
+                    update_option( $this->option_name, $new_key );
+                    add_settings_error( 'wper_messages', 'wper_saved', 'Settings Saved. Your Rescue URL has been updated.', 'success' );
+                }
+            }
+        }
+
+        // Handle Clear Logs
+        if ( isset( $_POST['action'] ) && $_POST['action'] === 'wper_clear_logs' ) {
+            if ( ! current_user_can( 'manage_options' ) ) {
+                return;
+            }
+            
+            if ( ! isset( $_POST['wper_nonce'] ) || ! wp_verify_nonce( $_POST['wper_nonce'], 'wper_clear_logs' ) ) {
+                return;
+            }
+
+            $log_file = $this->get_log_file_path();
+            if ( file_exists( $log_file ) ) {
+                file_put_contents( $log_file, '' );
+                add_settings_error( 'wper_messages', 'wper_logs_cleared', 'Activity logs have been cleared.', 'success' );
+            }
+        }
+    }
+
+    /**
+     * Get the path to the log file.
+     */
+    private function get_log_file_path() {
+        return dirname( __FILE__ ) . '/rescue_log.txt';
+    }
+
+    /**
+     * Get logs with pagination limit.
+     */
+    private function get_logs( $limit = 10 ) {
+        $log_file = $this->get_log_file_path();
+        if ( ! file_exists( $log_file ) ) {
+            return array();
+        }
+
+        $content = file_get_contents( $log_file );
+        if ( empty( $content ) ) {
+            return array();
+        }
+
+        // Split by newline and remove empty lines
+        $lines = array_filter( explode( "\n", $content ) );
+        
+        // Reverse to show newest first
+        $lines = array_reverse( $lines );
+        
+        // Slice to limit
+        return array_slice( $lines, 0, $limit );
+    }
+
+    /**
+     * Show the secret URL to the admin.
+     */
+    public function show_secret_key() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        // Check if dismissed
+        if ( get_user_meta( get_current_user_id(), $this->dismiss_option, true ) ) {
+            return;
+        }
+
+        $key = get_option( $this->option_name );
+        if ( $key ) {
+            $url = home_url( '/?' . $this->param_name . '=' . $key );
+            $dismiss_url = wp_nonce_url( add_query_arg( 'wper_dismiss', '1' ), 'wper_dismiss_notice' );
+            ?>
+            <div class="notice notice-warning is-dismissible">
+                <p><strong>🚑 Emergency Rescue:</strong> Save this URL to recover your site if it crashes:</p>
+                <p><code><a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $url ); ?></a></code></p>
+                <p><a href="<?php echo esc_url( $dismiss_url ); ?>" style="text-decoration:none; font-size: 0.9em;">Dismiss this notice permanently</a> (You can always find this in Tools > Emergency Rescue)</p>
+            </div>
+            <?php
+        }
+    }
+
+    /**
+     * Check if the rescue key is present in the URL.
+     */
+    private function check_rescue_mode() {
+        if ( isset( $_GET[ $this->param_name ] ) ) {
+            // Basic sanitization: Allow standard URL-safe characters
+            $key = sanitize_text_field( $_GET[ $this->param_name ] );
+            $stored_key = get_option( $this->option_name );
+
+            // If key matches, enter rescue mode
+            if ( $stored_key && $key === $stored_key ) {
+                $this->render_rescue_page();
+                exit; // Stop WordPress from loading further
+            }
+        }
+    }
+
+    /**
+     * Render the rescue interface.
+     */
+    private function render_rescue_page() {
+        // Handle any actions (rename/restore) before rendering
+        $this->handle_actions();
+
+        // Determine Theme Directory safely (get_theme_root might not be loaded)
+        $theme_dir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/themes' : ABSPATH . 'wp-content/themes';
+        if ( function_exists( 'get_theme_root' ) ) {
+            $theme_dir = get_theme_root();
+        }
+        
+        // Plugin Directory
+        $plugin_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
+
+        ?>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>WordPress Emergency Rescue</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background: #f0f0f1; color: #3c434a; padding: 20px; line-height: 1.5; }
+                .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 5px; }
+                h1 { color: #d63638; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+                h2 { margin-top: 30px; font-size: 1.3em; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #e5e5e5; }
+                th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e5e5e5; }
+                th { background: #f9f9f9; font-weight: 600; }
+                tr:hover { background: #fafafa; }
+                .btn { display: inline-block; padding: 6px 12px; text-decoration: none; border-radius: 3px; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
+                .btn-danger { background: #d63638; color: #fff; border-color: #d63638; }
+                .btn-danger:hover { background: #b32d2e; border-color: #b32d2e; }
+                .btn-primary { background: #2271b1; color: #fff; border-color: #2271b1; }
+                .btn-primary:hover { background: #135e96; border-color: #135e96; }
+                .btn-secondary { background: #f6f7f7; color: #2c3338; border-color: #dcdcde; }
+                .btn-secondary:hover { background: #f0f0f1; border-color: #c3c4c7; }
+                .status-active { color: #007017; font-weight: bold; background: #edfaef; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; }
+                .status-disabled { color: #d63638; font-weight: bold; background: #fbeaea; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; }
+                .message { padding: 12px; margin-bottom: 20px; border-left: 4px solid; box-shadow: 0 1px 1px rgba(0,0,0,0.04); }
+                .message.success { border-color: #46b450; background: #fff; }
+                .message.error { border-color: #d63638; background: #fff; }
+                code { background: #f0f0f1; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+                .footer { margin-top: 40px; font-size: 0.9em; color: #646970; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚑 Emergency Rescue</h1>
+                <p>Welcome to the emergency recovery mode. Here you can selectively disable plugins or themes by renaming their folders.</p>
+                
+                <div style="margin-bottom: 20px;">
+                    <a href="<?php echo esc_url( admin_url() ); ?>" class="btn btn-primary" target="_blank">Try Loading WP Admin &nearr;</a>
+                    <a href="<?php echo esc_url( home_url() ); ?>" class="btn btn-secondary" target="_blank">View Site &nearr;</a>
+                </div>
+                
+                <?php if ( ! empty( $_GET['msg'] ) ) : ?>
+                    <div class="message success"><?php echo esc_html( urldecode( $_GET['msg'] ) ); ?></div>
+                <?php endif; ?>
+
+                <?php if ( ! empty( $_GET['error'] ) ) : ?>
+                    <div class="message error"><?php echo esc_html( urldecode( $_GET['error'] ) ); ?></div>
+                <?php endif; ?>
+
+                <h2>Plugins</h2>
+                <?php $this->list_items( $plugin_dir, 'plugin' ); ?>
+
+                <h2>Themes</h2>
+                <?php $this->list_items( $theme_dir, 'theme' ); ?>
+                
+                <div class="footer">
+                    <p>Generated by WP Emergency Rescue &bull; <a href="?<?php echo $this->param_name . '=' . esc_attr( $_GET[ $this->param_name ] ); ?>">Refresh Page</a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        <?php
+    }
+
+    /**
+     * List items in a directory.
+     */
+    private function list_items( $directory, $type ) {
+        if ( ! is_dir( $directory ) ) {
+            echo "<div class='message error'>Directory not found: " . esc_html( $directory ) . "</div>";
+            return;
+        }
+
+        $items = scandir( $directory );
+        if ( ! $items ) {
+            echo "<p>No items found.</p>";
+            return;
+        }
+
+        echo '<table><thead><tr><th>Name (Folder)</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+
+        foreach ( $items as $item ) {
+            if ( $item === '.' || $item === '..' || $item === 'index.php' || $item === '.DS_Store' ) continue;
+            
+            $path = trailingslashit( $directory ) . $item;
+            if ( ! is_dir( $path ) && $type === 'theme' ) continue; // Themes must be directories
+            
+            // Basic detection of disabled items (renamed with .off suffix)
+            $is_disabled = ( substr( $item, -4 ) === '.off' );
+            $display_name = $is_disabled ? substr( $item, 0, -4 ) : $item;
+            
+            echo '<tr>';
+            echo '<td><strong>' . esc_html( $display_name ) . '</strong><br><small style="color:#666">' . esc_html( $item ) . '</small></td>';
+            echo '<td>' . ( $is_disabled ? '<span class="status-disabled">Disabled</span>' : '<span class="status-active">Active</span>' ) . '</td>';
+            echo '<td>';
+            
+            // Calculate new name
+            $new_name = $is_disabled ? $display_name : $item . '.off';
+            $action_label = $is_disabled ? 'Restore (Enable)' : 'Disable (Rename)';
+            $btn_class = $is_disabled ? 'btn-primary' : 'btn-danger';
+            
+            // Build Action URL
+            // We must preserve the secret key
+            $current_url = set_url_scheme( 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] );
+            $url = add_query_arg( array(
+                $this->param_name => $_GET[ $this->param_name ], // Keep secret key
+                'action'   => 'rename',
+                'type'     => $type,
+                'target'   => $item,
+                'new_name' => $new_name
+            ), $current_url );
+
+            echo '<a href="' . esc_url( $url ) . '" class="btn ' . $btn_class . '" onclick="return confirm(\'Are you sure you want to ' . strtolower( $action_label ) . '?\');">' . $action_label . '</a>';
+            
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    /**
+     * Handle rename actions.
+     */
+    private function handle_actions() {
+        if ( isset( $_GET['action'] ) && $_GET['action'] === 'rename' && isset( $_GET['target'] ) && isset( $_GET['new_name'] ) ) {
+            
+            $type = isset( $_GET['type'] ) ? $_GET['type'] : 'plugin';
+            
+            // Security: Sanitize filenames strictly to prevent directory traversal
+            $target = sanitize_file_name( $_GET['target'] );
+            $new_name = sanitize_file_name( $_GET['new_name'] );
+            
+            // Determine base directory again
+            if ( $type === 'theme' ) {
+                 $base_dir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/themes' : ABSPATH . 'wp-content/themes';
+                 if ( function_exists( 'get_theme_root' ) ) $base_dir = get_theme_root();
+            } else {
+                $base_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
+            }
+
+            $old_path = trailingslashit( $base_dir ) . $target;
+            $new_path = trailingslashit( $base_dir ) . $new_name;
+
+            // Verify paths exist and are valid
+            if ( ! file_exists( $old_path ) ) {
+                $this->redirect_with_msg( '', 'Target file does not exist.' );
+            }
+
+            if ( file_exists( $new_path ) ) {
+                $this->redirect_with_msg( '', 'Destination already exists.' );
+            }
+
+            // Perform Rename
+            if ( rename( $old_path, $new_path ) ) {
+                $this->log_change( "Renamed $target to $new_name ($type)" );
+                $this->redirect_with_msg( "Successfully renamed $target to $new_name" );
+            } else {
+                $this->redirect_with_msg( '', 'Failed to rename. Check file permissions.' );
+            }
+        }
+    }
+
+    private function redirect_with_msg( $success_msg = '', $error_msg = '' ) {
+        $url = remove_query_arg( array( 'action', 'target', 'new_name', 'type', 'msg', 'error' ) );
+        if ( $success_msg ) {
+            $url = add_query_arg( 'msg', urlencode( $success_msg ), $url );
+        }
+        if ( $error_msg ) {
+            $url = add_query_arg( 'error', urlencode( $error_msg ), $url );
+        }
+        header( "Location: $url" );
+        exit;
+    }
+
+    private function log_change( $message ) {
+        // Log to a file in the same directory as this script
+        $log_file = $this->get_log_file_path();
+        
+        $entry = date( 'Y-m-d H:i:s' ) . " - " . $message . " - IP: " . $_SERVER['REMOTE_ADDR'] . "\n";
+        @file_put_contents( $log_file, $entry, FILE_APPEND );
+    }
+}
+
+// Initialize the plugin
+new WP_Emergency_Rescue();
