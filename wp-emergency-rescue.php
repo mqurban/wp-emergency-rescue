@@ -19,6 +19,9 @@ class WP_Emergency_Rescue {
     private $dismiss_option = 'wper_notice_dismissed';
 
     public function __construct() {
+        // Step 0: Handle Debug Mode (Must be first to catch early errors)
+        $this->handle_debug_mode();
+
         // Step 1: Initialize
         // Check for rescue mode immediately (for mu-plugin support)
         $this->check_rescue_mode();
@@ -29,6 +32,101 @@ class WP_Emergency_Rescue {
         add_action( 'admin_init', array( $this, 'handle_admin_actions' ) ); // Handle dismissal and settings save
         add_action( 'admin_notices', array( $this, 'show_secret_key' ) );
         add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
+    }
+
+    /**
+     * Handle Debug Mode toggles.
+     * Sets cookies and applies debug constants/ini settings.
+     */
+    private function handle_debug_mode() {
+        $secret_key = get_option( $this->option_name );
+        $cookie_val = md5( $secret_key );
+
+        // Handle Toggles via GET request (Only if rescue key is present and correct)
+        if ( isset( $_GET[ $this->param_name ] ) && $_GET[ $this->param_name ] === $secret_key ) {
+            if ( isset( $_GET['wper_debug_toggle'] ) ) {
+                $toggle = $_GET['wper_debug_toggle'];
+                $cookie_name = 'wper_debug_' . $toggle;
+                
+                // Toggle the cookie value (cookie_val or empty)
+                $current = isset( $_COOKIE[ $cookie_name ] ) ? $_COOKIE[ $cookie_name ] : '';
+                $new_val = ( $current === $cookie_val ) ? '' : $cookie_val;
+                
+                // Set cookie for 1 hour
+                // Note: COOKIEPATH and COOKIE_DOMAIN might not be defined yet in mu-plugins
+                setcookie( $cookie_name, $new_val, time() + 3600, '/' );
+                $_COOKIE[ $cookie_name ] = $new_val; // Update current request
+                
+                // Redirect to remove the toggle param
+                $url = remove_query_arg( 'wper_debug_toggle' );
+                header( "Location: $url" );
+                exit;
+            }
+        }
+
+        // Apply Settings based on Cookies (Check validity)
+        $debug_log = isset( $_COOKIE['wper_debug_log'] ) && $_COOKIE['wper_debug_log'] === $cookie_val;
+
+        if ( $debug_log ) {
+            // Try to define constants if not already defined
+            if ( ! defined( 'WP_DEBUG' ) ) {
+                define( 'WP_DEBUG', true );
+            }
+        }
+
+        if ( $debug_log ) {
+            if ( ! defined( 'WP_DEBUG_LOG' ) ) {
+                define( 'WP_DEBUG_LOG', true );
+            }
+            @ini_set( 'log_errors', 1 );
+            // Ensure we know where the log goes if WP hasn't set it
+            if ( defined( 'WP_CONTENT_DIR' ) ) {
+                @ini_set( 'error_log', WP_CONTENT_DIR . '/debug.log' );
+            }
+        }
+    }
+
+    /**
+     * Get the last N bytes of the debug.log file and reverse lines.
+     */
+    private function get_debug_log_content( $max_size = 20480 ) {
+        $log_file = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/debug.log' : ABSPATH . 'wp-content/debug.log';
+        
+        if ( ! file_exists( $log_file ) ) {
+            return "Debug log file not found at " . basename($log_file) . ". Enable 'Debug Log (File)' and trigger an error to create it.";
+        }
+        
+        if ( ! is_readable( $log_file ) ) {
+            return "Debug log file exists but is not readable.";
+        }
+
+        $fp = fopen( $log_file, 'r' );
+        if ( ! $fp ) return "Cannot open log file.";
+        
+        fseek( $fp, 0, SEEK_END );
+        $size = ftell( $fp );
+        
+        if ( $size === 0 ) {
+            fclose( $fp );
+            return "Debug log file is empty.";
+        }
+
+        $seek = max( 0, $size - $max_size );
+        fseek( $fp, $seek );
+        
+        // Discard first partial line if we seeked
+        if ( $seek > 0 ) {
+            fgets( $fp ); 
+        }
+
+        $content = fread( $fp, $max_size );
+        fclose( $fp );
+        
+        // Reverse lines for better readability (Newest first)
+        $lines = explode( "\n", $content );
+        $lines = array_reverse( array_filter( $lines ) );
+        
+        return htmlspecialchars( implode( "\n", $lines ) );
     }
 
     /**
@@ -344,6 +442,33 @@ class WP_Emergency_Rescue {
                     <a href="<?php echo esc_url( admin_url() ); ?>" class="btn btn-primary" target="_blank">Try Loading WP Admin &nearr;</a>
                     <a href="<?php echo esc_url( home_url() ); ?>" class="btn btn-secondary" target="_blank">View Site &nearr;</a>
                 </div>
+
+                <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-left: 4px solid #2271b1; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                    <h3 style="margin-top:0;">🔧 Debug Tools</h3>
+                    <p>Toggle debugging options for this session:</p>
+                    <?php
+                    $debug_display = isset( $_COOKIE['wper_debug_display'] ) && $_COOKIE['wper_debug_display'];
+                    $debug_log     = isset( $_COOKIE['wper_debug_log'] ) && $_COOKIE['wper_debug_log'];
+                    
+                    // Build toggle URLs
+                    // We must preserve the secret key which is in $_GET
+                    $current_url = set_url_scheme( 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] );
+                    $url_log     = add_query_arg( 'wper_debug_toggle', 'log', $current_url );
+                    ?>
+                    
+                    <a href="<?php echo esc_url( $url_log ); ?>" class="btn <?php echo $debug_log ? 'btn-primary' : 'btn-secondary'; ?>">
+                        <?php echo $debug_log ? 'Disable' : 'Enable'; ?> Debug Log (File)
+                    </a>
+                </div>
+
+                <?php if ( $debug_log ) : ?>
+                <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-left: 4px solid #2271b1; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
+                    <h3 style="margin-top:0;">📄 Debug Log Viewer</h3>
+                    <p>Last 20KB of <code>debug.log</code>:</p>
+                    <textarea style="width:100%; height: 300px; font-family: monospace; font-size: 12px; background: #f0f0f1; border: 1px solid #ddd; padding: 10px; white-space: pre;" readonly><?php echo $this->get_debug_log_content(); ?></textarea>
+                    <p style="text-align: right; margin-top: 5px;"><a href="<?php echo esc_url( remove_query_arg( 'wper_test_error', $current_url ) ); ?>" class="btn btn-secondary">Refresh Log</a></p>
+                </div>
+                <?php endif; ?>
                 
                 <?php if ( ! empty( $_GET['msg'] ) ) : ?>
                     <div class="message success"><?php echo esc_html( urldecode( $_GET['msg'] ) ); ?></div>
