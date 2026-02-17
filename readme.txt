@@ -55,8 +55,9 @@ No. It simply renames the plugin or theme folder by appending `.off` (e.g., `plu
 == Screenshots ==
 
 1. **Rescue Interface** - The fail-safe screen where you can disable plugins and view debug logs.
-2. **Admin Settings** - Configure your secret key and view activity logs.
-3. **Debug Log Viewer** - View real-time error logs directly from the rescue interface.
+2. **Disable Plugins** - Disable Plugins by just clicking the deactivate.
+3. **Disable Theme** - Disable theme if the error is in the theme, your website will fallback to default theme. Make sure you have at least one extra theme.
+4. **Admin Interface Guide** - The admin settings page under Tools -> Emergency Rescue.
 
 == Changelog ==
 

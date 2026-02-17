@@ -68,12 +68,16 @@ Once you have fixed the code or decided to re-enable the plugin:
 *The fail-safe screen where you can disable plugins and view debug logs.*
 
 ### 2. Admin Settings
-![Admin Settings](assets/screenshot-2.png)
-*Configure your secret key and view activity logs.*
+![Disable Plugins](assets/screenshot-2.png)
+*Disalbe Plugins by just clicking the deactivate.*
 
 ### 3. Debug Log Viewer
-![Debug Log Viewer](assets/screenshot-3.png)
-*View real-time error logs directly from the rescue interface.*
+![Disable Theme](assets/screenshot-3.png)
+*Disable theme if the error is in the theme, your website will fallback to default theme. Make sure you have at least one extra theme.*
+
+### 4. Admin Interface Guide
+![Admin Interface Guide](assets/screenshot-4.png)
+*The admin settings page under Tools -> Emergency Rescue.*
 
 ## ⚠️ Disclaimer
 This tool modifies filesystem paths (renames folders). Use it responsibly. It is designed for emergency recovery when you cannot access the WordPress dashboard.
