@@ -1,6 +1,6 @@
-# 🚑 WP Emergency Rescue
+# 🚑 Emergency Rescue
 
-**WP Emergency Rescue** is a lightweight, "Must-Use" (MU) WordPress plugin designed to help you recover from fatal PHP errors (White Screen of Death) that lock you out of the admin panel.
+**Emergency Rescue** is a lightweight, "Must-Use" (MU) WordPress plugin designed to help you recover from fatal PHP errors (White Screen of Death) that lock you out of the admin panel.
 
 It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *before* your active plugins, allowing you to selectively disable problematic plugins or themes by renaming their folders.
 
@@ -21,12 +21,12 @@ It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *b
 
 To ensure this plugin works even when your site is crashing, you should install it as a **Must-Use (MU) Plugin**.
 
-1.  **Download** the plugin file `wp-emergency-rescue.php`.
+1.  **Download** the plugin file `emergency-rescue.php`.
 2.  Access your site via **FTP** or your hosting **File Manager**.
 3.  Navigate to `wp-content/`.
 4.  Check for a folder named `mu-plugins`. If it doesn't exist, **create it**.
-5.  **Upload/Move** `wp-emergency-rescue.php` directly into `wp-content/mu-plugins/`.
-    *   *Important:* Do not put it inside a subfolder (e.g., `mu-plugins/wp-emergency-rescue/wp-emergency-rescue.php` will NOT work without a loader). It must be `wp-content/mu-plugins/wp-emergency-rescue.php`.
+5.  **Upload/Move** `emergency-rescue.php` directly into `wp-content/mu-plugins/`.
+    *   *Important:* Do not put it inside a subfolder (e.g., `mu-plugins/wp-emergency-rescue/emergency-rescue.php` will NOT work without a loader). It must be `wp-content/mu-plugins/emergency-rescue.php`.
 
 *(Note: You can also install it as a regular plugin in `wp-content/plugins/`, but it might not load early enough to catch all fatal errors.)*
 
