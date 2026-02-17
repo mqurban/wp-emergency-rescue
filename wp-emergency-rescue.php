@@ -1,24 +1,29 @@
 <?php
 /**
- * Plugin Name: Emergency Rescue
+ * Plugin Name: WP Emergency Rescue
  * Description: A must-use plugin to recover from fatal errors by renaming plugins/themes via a secret URL.
  * Version: 1.1.0
  * Author: Muhammad Qurban
  * Author URI: https://mqurban.com
  * License: GPLv2 or later
+ * Text Domain: wp-emergency-rescue
+ * Domain Path: /languages
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class WP_Emergency_Rescue {
+class WPER_Emergency_Rescue {
 
     private $option_name = 'wper_secret_key';
     private $param_name  = 'rescue_key';
     private $dismiss_option = 'wper_notice_dismissed';
 
     public function __construct() {
+        // Load text domain
+        add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
+
         // Step 0: Handle Debug Mode (Must be first to catch early errors)
         $this->handle_debug_mode();
 
@@ -32,6 +37,13 @@ class WP_Emergency_Rescue {
         add_action( 'admin_init', array( $this, 'handle_admin_actions' ) ); // Handle dismissal and settings save
         add_action( 'admin_notices', array( $this, 'show_secret_key' ) );
         add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
+    }
+
+    /**
+     * Load plugin textdomain.
+     */
+    public function load_textdomain() {
+        load_plugin_textdomain( 'wp-emergency-rescue', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
     }
 
     /**
@@ -93,22 +105,22 @@ class WP_Emergency_Rescue {
         $log_file = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/debug.log' : ABSPATH . 'wp-content/debug.log';
         
         if ( ! file_exists( $log_file ) ) {
-            return "Debug log file not found at " . basename($log_file) . ". Enable 'Debug Log (File)' and trigger an error to create it.";
+            return sprintf( __( "Debug log file not found at %s. Enable 'Debug Log (File)' and trigger an error to create it.", 'wp-emergency-rescue' ), basename($log_file) );
         }
         
         if ( ! is_readable( $log_file ) ) {
-            return "Debug log file exists but is not readable.";
+            return __( "Debug log file exists but is not readable.", 'wp-emergency-rescue' );
         }
 
         $fp = fopen( $log_file, 'r' );
-        if ( ! $fp ) return "Cannot open log file.";
+        if ( ! $fp ) return __( "Cannot open log file.", 'wp-emergency-rescue' );
         
         fseek( $fp, 0, SEEK_END );
         $size = ftell( $fp );
         
         if ( $size === 0 ) {
             fclose( $fp );
-            return "Debug log file is empty.";
+            return __( "Debug log file is empty.", 'wp-emergency-rescue' );
         }
 
         $seek = max( 0, $size - $max_size );
@@ -146,8 +158,8 @@ class WP_Emergency_Rescue {
      */
     public function register_menu_page() {
         add_management_page(
-            'Emergency Rescue',
-            'Emergency Rescue',
+            __( 'Emergency Rescue', 'wp-emergency-rescue' ),
+            __( 'Emergency Rescue', 'wp-emergency-rescue' ),
             'manage_options',
             'wp-emergency-rescue',
             array( $this, 'render_settings_page' )
@@ -162,74 +174,74 @@ class WP_Emergency_Rescue {
         $url = home_url( '/?' . $this->param_name . '=' . $key );
         ?>
         <div class="wrap">
-            <h1>🚑 Emergency Rescue Settings</h1>
+            <h1>🚑 <?php esc_html_e( 'Emergency Rescue Settings', 'wp-emergency-rescue' ); ?></h1>
             
             <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
-                <h2>Your Emergency Rescue URL</h2>
-                <p>Use this URL to access the recovery interface if your site crashes and you cannot access the admin panel.</p>
+                <h2><?php esc_html_e( 'Your Emergency Rescue URL', 'wp-emergency-rescue' ); ?></h2>
+                <p><?php esc_html_e( 'Use this URL to access the recovery interface if your site crashes and you cannot access the admin panel.', 'wp-emergency-rescue' ); ?></p>
                 <p>
                     <input type="text" class="large-text code" value="<?php echo esc_url( $url ); ?>" readonly onclick="this.select();">
                 </p>
-                <p class="description"><strong>Tip:</strong> Bookmark this URL now.</p>
+                <p class="description"><strong><?php esc_html_e( 'Tip:', 'wp-emergency-rescue' ); ?></strong> <?php esc_html_e( 'Bookmark this URL now.', 'wp-emergency-rescue' ); ?></p>
             </div>
 
             <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
-                <h2>Custom Configuration</h2>
+                <h2><?php esc_html_e( 'Custom Configuration', 'wp-emergency-rescue' ); ?></h2>
                 <form method="post" action="">
                     <?php wp_nonce_field( 'wper_save_settings', 'wper_nonce' ); ?>
                     <input type="hidden" name="action" value="wper_save_settings">
                     
                     <table class="form-table">
                         <tr>
-                            <th scope="row"><label for="custom_secret_key">Secret Key</label></th>
+                            <th scope="row"><label for="custom_secret_key"><?php esc_html_e( 'Secret Key', 'wp-emergency-rescue' ); ?></label></th>
                             <td>
                                 <input name="custom_secret_key" type="text" id="custom_secret_key" value="<?php echo esc_attr( $key ); ?>" class="regular-text code">
-                                <p class="description">You can change this key to something memorable (e.g., a custom password). <br><strong>Warning:</strong> Changing this invalidates the old Rescue URL.</p>
+                                <p class="description"><?php esc_html_e( 'You can change this key to something memorable (e.g., a custom password).', 'wp-emergency-rescue' ); ?> <br><strong><?php esc_html_e( 'Warning:', 'wp-emergency-rescue' ); ?></strong> <?php esc_html_e( 'Changing this invalidates the old Rescue URL.', 'wp-emergency-rescue' ); ?></p>
                             </td>
                         </tr>
                     </table>
                     
-                    <?php submit_button( 'Save Changes' ); ?>
+                    <?php submit_button( __( 'Save Changes', 'wp-emergency-rescue' ) ); ?>
                 </form>
             </div>
 
             <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
-                <h2>Activity Logs</h2>
+                <h2><?php esc_html_e( 'Activity Logs', 'wp-emergency-rescue' ); ?></h2>
                 <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
                     <form method="get" action="">
                         <input type="hidden" name="page" value="wp-emergency-rescue">
-                        <label for="wper_log_limit">Show last: </label>
+                        <label for="wper_log_limit"><?php esc_html_e( 'Show last:', 'wp-emergency-rescue' ); ?> </label>
                         <select name="limit" id="wper_log_limit" onchange="this.form.submit()">
                             <?php 
                             $limit = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : 10;
                             $options = array( 10, 25, 50, 100 );
                             foreach ( $options as $opt ) {
-                                echo '<option value="' . $opt . '" ' . selected( $limit, $opt, false ) . '>' . $opt . ' entries</option>';
+                                echo '<option value="' . $opt . '" ' . selected( $limit, $opt, false ) . '>' . sprintf( __( '%d entries', 'wp-emergency-rescue' ), $opt ) . '</option>';
                             }
                             ?>
                         </select>
                     </form>
                     
-                    <form method="post" action="" onsubmit="return confirm('Are you sure you want to clear all logs?');">
+                    <form method="post" action="" onsubmit="return confirm('<?php esc_attr_e( 'Are you sure you want to clear all logs?', 'wp-emergency-rescue' ); ?>');">
                         <?php wp_nonce_field( 'wper_clear_logs', 'wper_nonce' ); ?>
                         <input type="hidden" name="action" value="wper_clear_logs">
-                        <?php submit_button( 'Clear Logs', 'delete', 'submit', false, array( 'style' => 'margin:0;' ) ); ?>
+                        <?php submit_button( __( 'Clear Logs', 'wp-emergency-rescue' ), 'delete', 'submit', false, array( 'style' => 'margin:0;' ) ); ?>
                     </form>
                 </div>
 
                 <table class="widefat striped">
                     <thead>
                         <tr>
-                            <th style="width: 180px;">Time</th>
-                            <th>Action / Message</th>
-                            <th style="width: 120px;">IP Address</th>
+                            <th style="width: 180px;"><?php esc_html_e( 'Time', 'wp-emergency-rescue' ); ?></th>
+                            <th><?php esc_html_e( 'Action / Message', 'wp-emergency-rescue' ); ?></th>
+                            <th style="width: 120px;"><?php esc_html_e( 'IP Address', 'wp-emergency-rescue' ); ?></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php 
                         $logs = $this->get_logs( $limit );
                         if ( empty( $logs ) ) : ?>
-                            <tr><td colspan="3">No activity logs found.</td></tr>
+                            <tr><td colspan="3"><?php esc_html_e( 'No activity logs found.', 'wp-emergency-rescue' ); ?></td></tr>
                         <?php else : ?>
                             <?php foreach ( $logs as $log ) : 
                                 // Basic parsing: "DATE TIME - Message - IP: IP"
@@ -288,7 +300,7 @@ class WP_Emergency_Rescue {
                 
                 if ( ! empty( $new_key ) ) {
                     update_option( $this->option_name, $new_key );
-                    add_settings_error( 'wper_messages', 'wper_saved', 'Settings Saved. Your Rescue URL has been updated.', 'success' );
+                    add_settings_error( 'wper_messages', 'wper_saved', __( 'Settings Saved. Your Rescue URL has been updated.', 'wp-emergency-rescue' ), 'success' );
                 }
             }
         }
@@ -306,7 +318,7 @@ class WP_Emergency_Rescue {
             $log_file = $this->get_log_file_path();
             if ( file_exists( $log_file ) ) {
                 file_put_contents( $log_file, '' );
-                add_settings_error( 'wper_messages', 'wper_logs_cleared', 'Activity logs have been cleared.', 'success' );
+                add_settings_error( 'wper_messages', 'wper_logs_cleared', __( 'Activity logs have been cleared.', 'wp-emergency-rescue' ), 'success' );
             }
         }
     }
@@ -361,9 +373,9 @@ class WP_Emergency_Rescue {
             $dismiss_url = wp_nonce_url( add_query_arg( 'wper_dismiss', '1' ), 'wper_dismiss_notice' );
             ?>
             <div class="notice notice-warning is-dismissible">
-                <p><strong>🚑 Emergency Rescue:</strong> Save this URL to recover your site if it crashes:</p>
+                <p><strong>🚑 <?php esc_html_e( 'Emergency Rescue:', 'wp-emergency-rescue' ); ?></strong> <?php esc_html_e( 'Save this URL to recover your site if it crashes:', 'wp-emergency-rescue' ); ?></p>
                 <p><code><a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $url ); ?></a></code></p>
-                <p><a href="<?php echo esc_url( $dismiss_url ); ?>" style="text-decoration:none; font-size: 0.9em;">Dismiss this notice permanently</a> (You can always find this in Tools > Emergency Rescue)</p>
+                <p><a href="<?php echo esc_url( $dismiss_url ); ?>" style="text-decoration:none; font-size: 0.9em;"><?php esc_html_e( 'Dismiss this notice permanently', 'wp-emergency-rescue' ); ?></a> <?php esc_html_e( '(You can always find this in Tools > Emergency Rescue)', 'wp-emergency-rescue' ); ?></p>
             </div>
             <?php
         }
@@ -406,7 +418,7 @@ class WP_Emergency_Rescue {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>WordPress Emergency Rescue</title>
+            <title><?php esc_html_e( 'WordPress Emergency Rescue', 'wp-emergency-rescue' ); ?></title>
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
                 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background: #f0f0f1; color: #3c434a; padding: 20px; line-height: 1.5; }
@@ -435,17 +447,17 @@ class WP_Emergency_Rescue {
         </head>
         <body>
             <div class="container">
-                <h1>🚑 Emergency Rescue</h1>
-                <p>Welcome to the emergency recovery mode. Here you can selectively disable plugins or themes by renaming their folders.</p>
+                <h1>🚑 <?php esc_html_e( 'Emergency Rescue', 'wp-emergency-rescue' ); ?></h1>
+                <p><?php esc_html_e( 'Welcome to the emergency recovery mode. Here you can selectively disable plugins or themes by renaming their folders.', 'wp-emergency-rescue' ); ?></p>
                 
                 <div style="margin-bottom: 20px;">
-                    <a href="<?php echo esc_url( admin_url() ); ?>" class="btn btn-primary" target="_blank">Try Loading WP Admin &nearr;</a>
-                    <a href="<?php echo esc_url( home_url() ); ?>" class="btn btn-secondary" target="_blank">View Site &nearr;</a>
+                    <a href="<?php echo esc_url( admin_url() ); ?>" class="btn btn-primary" target="_blank"><?php esc_html_e( 'Try Loading WP Admin', 'wp-emergency-rescue' ); ?> &nearr;</a>
+                    <a href="<?php echo esc_url( home_url() ); ?>" class="btn btn-secondary" target="_blank"><?php esc_html_e( 'View Site', 'wp-emergency-rescue' ); ?> &nearr;</a>
                 </div>
 
                 <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-left: 4px solid #2271b1; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                    <h3 style="margin-top:0;">🔧 Debug Tools</h3>
-                    <p>Toggle debugging options for this session:</p>
+                    <h3 style="margin-top:0;">🔧 <?php esc_html_e( 'Debug Tools', 'wp-emergency-rescue' ); ?></h3>
+                    <p><?php esc_html_e( 'Toggle debugging options for this session:', 'wp-emergency-rescue' ); ?></p>
                     <?php
                     $debug_display = isset( $_COOKIE['wper_debug_display'] ) && $_COOKIE['wper_debug_display'];
                     $debug_log     = isset( $_COOKIE['wper_debug_log'] ) && $_COOKIE['wper_debug_log'];
@@ -457,16 +469,16 @@ class WP_Emergency_Rescue {
                     ?>
                     
                     <a href="<?php echo esc_url( $url_log ); ?>" class="btn <?php echo $debug_log ? 'btn-primary' : 'btn-secondary'; ?>">
-                        <?php echo $debug_log ? 'Disable' : 'Enable'; ?> Debug Log (File)
+                        <?php echo $debug_log ? __( 'Disable', 'wp-emergency-rescue' ) : __( 'Enable', 'wp-emergency-rescue' ); ?> <?php esc_html_e( 'Debug Log (File)', 'wp-emergency-rescue' ); ?>
                     </a>
                 </div>
 
                 <?php if ( $debug_log ) : ?>
                 <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-left: 4px solid #2271b1; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                    <h3 style="margin-top:0;">📄 Debug Log Viewer</h3>
-                    <p>Last 20KB of <code>debug.log</code>:</p>
+                    <h3 style="margin-top:0;">📄 <?php esc_html_e( 'Debug Log Viewer', 'wp-emergency-rescue' ); ?></h3>
+                    <p><?php printf( __( 'Last %s of %s:', 'wp-emergency-rescue' ), '20KB', '<code>debug.log</code>' ); ?></p>
                     <textarea style="width:100%; height: 300px; font-family: monospace; font-size: 12px; background: #f0f0f1; border: 1px solid #ddd; padding: 10px; white-space: pre;" readonly><?php echo $this->get_debug_log_content(); ?></textarea>
-                    <p style="text-align: right; margin-top: 5px;"><a href="<?php echo esc_url( remove_query_arg( 'wper_test_error', $current_url ) ); ?>" class="btn btn-secondary">Refresh Log</a></p>
+                    <p style="text-align: right; margin-top: 5px;"><a href="<?php echo esc_url( remove_query_arg( 'wper_test_error', $current_url ) ); ?>" class="btn btn-secondary"><?php esc_html_e( 'Refresh Log', 'wp-emergency-rescue' ); ?></a></p>
                 </div>
                 <?php endif; ?>
                 
@@ -478,14 +490,14 @@ class WP_Emergency_Rescue {
                     <div class="message error"><?php echo esc_html( urldecode( $_GET['error'] ) ); ?></div>
                 <?php endif; ?>
 
-                <h2>Plugins</h2>
+                <h2><?php esc_html_e( 'Plugins', 'wp-emergency-rescue' ); ?></h2>
                 <?php $this->list_items( $plugin_dir, 'plugin' ); ?>
 
-                <h2>Themes</h2>
+                <h2><?php esc_html_e( 'Themes', 'wp-emergency-rescue' ); ?></h2>
                 <?php $this->list_items( $theme_dir, 'theme' ); ?>
                 
                 <div class="footer">
-                    <p>Generated by WP Emergency Rescue &bull; <a href="?<?php echo $this->param_name . '=' . esc_attr( $_GET[ $this->param_name ] ); ?>">Refresh Page</a></p>
+                    <p><?php esc_html_e( 'Generated by WP Emergency Rescue', 'wp-emergency-rescue' ); ?> &bull; <a href="?<?php echo $this->param_name . '=' . esc_attr( $_GET[ $this->param_name ] ); ?>"><?php esc_html_e( 'Refresh Page', 'wp-emergency-rescue' ); ?></a></p>
                 </div>
             </div>
         </body>
@@ -498,17 +510,17 @@ class WP_Emergency_Rescue {
      */
     private function list_items( $directory, $type ) {
         if ( ! is_dir( $directory ) ) {
-            echo "<div class='message error'>Directory not found: " . esc_html( $directory ) . "</div>";
+            echo "<div class='message error'>" . sprintf( __( 'Directory not found: %s', 'wp-emergency-rescue' ), esc_html( $directory ) ) . "</div>";
             return;
         }
 
         $items = scandir( $directory );
         if ( ! $items ) {
-            echo "<p>No items found.</p>";
+            echo "<p>" . __( 'No items found.', 'wp-emergency-rescue' ) . "</p>";
             return;
         }
 
-        echo '<table><thead><tr><th>Name (Folder)</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>' . __( 'Name (Folder)', 'wp-emergency-rescue' ) . '</th><th>' . __( 'Status', 'wp-emergency-rescue' ) . '</th><th>' . __( 'Action', 'wp-emergency-rescue' ) . '</th></tr></thead><tbody>';
 
         foreach ( $items as $item ) {
             if ( $item === '.' || $item === '..' || $item === 'index.php' || $item === '.DS_Store' ) continue;
@@ -522,12 +534,12 @@ class WP_Emergency_Rescue {
             
             echo '<tr>';
             echo '<td><strong>' . esc_html( $display_name ) . '</strong><br><small style="color:#666">' . esc_html( $item ) . '</small></td>';
-            echo '<td>' . ( $is_disabled ? '<span class="status-disabled">Disabled</span>' : '<span class="status-active">Active</span>' ) . '</td>';
+            echo '<td>' . ( $is_disabled ? '<span class="status-disabled">' . __( 'Disabled', 'wp-emergency-rescue' ) . '</span>' : '<span class="status-active">' . __( 'Active', 'wp-emergency-rescue' ) . '</span>' ) . '</td>';
             echo '<td>';
             
             // Calculate new name
             $new_name = $is_disabled ? $display_name : $item . '.off';
-            $action_label = $is_disabled ? 'Restore (Enable)' : 'Disable (Rename)';
+            $action_label = $is_disabled ? __( 'Restore (Enable)', 'wp-emergency-rescue' ) : __( 'Disable (Rename)', 'wp-emergency-rescue' );
             $btn_class = $is_disabled ? 'btn-primary' : 'btn-danger';
             
             // Build Action URL
@@ -541,7 +553,7 @@ class WP_Emergency_Rescue {
                 'new_name' => $new_name
             ), $current_url );
 
-            echo '<a href="' . esc_url( $url ) . '" class="btn ' . $btn_class . '" onclick="return confirm(\'Are you sure you want to ' . strtolower( $action_label ) . '?\');">' . $action_label . '</a>';
+            echo '<a href="' . esc_url( $url ) . '" class="btn ' . $btn_class . '" onclick="return confirm(\'' . esc_js( sprintf( __( 'Are you sure you want to %s?', 'wp-emergency-rescue' ), strtolower( $action_label ) ) ) . '\');">' . $action_label . '</a>';
             
             echo '</td>';
             echo '</tr>';
@@ -574,19 +586,19 @@ class WP_Emergency_Rescue {
 
             // Verify paths exist and are valid
             if ( ! file_exists( $old_path ) ) {
-                $this->redirect_with_msg( '', 'Target file does not exist.' );
+                $this->redirect_with_msg( '', __( 'Target file does not exist.', 'wp-emergency-rescue' ) );
             }
 
             if ( file_exists( $new_path ) ) {
-                $this->redirect_with_msg( '', 'Destination already exists.' );
+                $this->redirect_with_msg( '', __( 'Destination already exists.', 'wp-emergency-rescue' ) );
             }
 
             // Perform Rename
             if ( rename( $old_path, $new_path ) ) {
-                $this->log_change( "Renamed $target to $new_name ($type)" );
-                $this->redirect_with_msg( "Successfully renamed $target to $new_name" );
+                $this->log_change( sprintf( "Renamed %s to %s (%s)", $target, $new_name, $type ) );
+                $this->redirect_with_msg( sprintf( __( 'Successfully renamed %s to %s', 'wp-emergency-rescue' ), $target, $new_name ) );
             } else {
-                $this->redirect_with_msg( '', 'Failed to rename. Check file permissions.' );
+                $this->redirect_with_msg( '', __( 'Failed to rename. Check file permissions.', 'wp-emergency-rescue' ) );
             }
         }
     }
@@ -613,4 +625,4 @@ class WP_Emergency_Rescue {
 }
 
 // Initialize the plugin
-new WP_Emergency_Rescue();
+new WPER_Emergency_Rescue();

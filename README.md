@@ -61,5 +61,19 @@ Once you have fixed the code or decided to re-enable the plugin:
 *   **Sanitized Inputs**: All file operations are strictly sanitized to prevent directory traversal attacks.
 *   **Capability Check**: The settings page in the admin panel is restricted to users with `manage_options` capability (Admins).
 
+## 📸 Screenshots
+
+### 1. Rescue Interface
+![Rescue Interface](assets/screenshot-1.png)
+*The fail-safe screen where you can disable plugins and view debug logs.*
+
+### 2. Admin Settings
+![Admin Settings](assets/screenshot-2.png)
+*Configure your secret key and view activity logs.*
+
+### 3. Debug Log Viewer
+![Debug Log Viewer](assets/screenshot-3.png)
+*View real-time error logs directly from the rescue interface.*
+
 ## ⚠️ Disclaimer
 This tool modifies filesystem paths (renames folders). Use it responsibly. It is designed for emergency recovery when you cannot access the WordPress dashboard.
