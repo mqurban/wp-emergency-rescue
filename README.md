@@ -1,6 +1,6 @@
-# 🚑 Emergency Rescue
+# 🚑 MrQurban Emergency Rescue
 
-**Emergency Rescue** is a lightweight, "Must-Use" (MU) WordPress plugin designed to help you recover from fatal PHP errors (White Screen of Death) that lock you out of the admin panel.
+**MrQurban Emergency Rescue** is a lightweight, "Must-Use" (MU) WordPress plugin designed to help you recover from fatal PHP errors (White Screen of Death) that lock you out of the admin panel.
 
 It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *before* your active plugins, allowing you to selectively disable problematic plugins or themes by renaming their folders.
 
@@ -21,12 +21,12 @@ It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *b
 
 To ensure this plugin works even when your site is crashing, you should install it as a **Must-Use (MU) Plugin**.
 
-1.  **Download** the plugin file `emergency-rescue.php`.
+1.  **Download** the plugin file `mrqurban-emergency-rescue.php`.
 2.  Access your site via **FTP** or your hosting **File Manager**.
 3.  Navigate to `wp-content/`.
 4.  Check for a folder named `mu-plugins`. If it doesn't exist, **create it**.
-5.  **Upload/Move** `emergency-rescue.php` directly into `wp-content/mu-plugins/`.
-    *   *Important:* Do not put it inside a subfolder (e.g., `mu-plugins/wp-emergency-rescue/emergency-rescue.php` will NOT work without a loader). It must be `wp-content/mu-plugins/emergency-rescue.php`.
+5.  **Upload/Move** `mrqurban-emergency-rescue.php` directly into `wp-content/mu-plugins/`.
+    *   *Important:* Do not put it inside a subfolder (e.g., `mu-plugins/mrqurban-emergency-rescue/mrqurban-emergency-rescue.php` will NOT work without a loader). It must be `wp-content/mu-plugins/mrqurban-emergency-rescue.php`.
 
 *(Note: You can also install it as a regular plugin in `wp-content/plugins/`, but it might not load early enough to catch all fatal errors.)*
 
@@ -60,24 +60,6 @@ Once you have fixed the code or decided to re-enable the plugin:
 *   **Secret Key Enforced**: The interface is only accessible if the URL contains the correct `rescue_key`.
 *   **Sanitized Inputs**: All file operations are strictly sanitized to prevent directory traversal attacks.
 *   **Capability Check**: The settings page in the admin panel is restricted to users with `manage_options` capability (Admins).
-
-## 📸 Screenshots
-
-### 1. Rescue Interface
-![Rescue Interface](assets/screenshot-1.png)
-*The fail-safe screen where you can disable plugins and view debug logs.*
-
-### 2. Admin Settings
-![Disable Plugins](assets/screenshot-2.png)
-*Disalbe Plugins by just clicking the deactivate.*
-
-### 3. Debug Log Viewer
-![Disable Theme](assets/screenshot-3.png)
-*Disable theme if the error is in the theme, your website will fallback to default theme. Make sure you have at least one extra theme.*
-
-### 4. Admin Interface Guide
-![Admin Interface Guide](assets/screenshot-4.png)
-*The admin settings page under Tools -> Emergency Rescue.*
 
 ## ⚠️ Disclaimer
 This tool modifies filesystem paths (renames folders). Use it responsibly. It is designed for emergency recovery when you cannot access the WordPress dashboard.

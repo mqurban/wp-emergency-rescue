@@ -1,4 +1,4 @@
-=== Emergency Rescue ===
+=== MrQurban Emergency Rescue ===
 Contributors: Muhammad Qurban
 Tags: recovery, debug, white screen of death, fatal error, troubleshooting, emergency rescue
 Requires at least: 5.0
@@ -12,7 +12,7 @@ Recover from fatal errors and White Screen of Death (WSOD) by disabling plugins 
 
 == Description ==
 
-**Emergency Rescue** is a lightweight, life-saving plugin designed to help you recover your WordPress site when you are locked out of the admin panel due to a fatal error, "Critical Error," or the dreaded White Screen of Death (WSOD).
+**MrQurban Emergency Rescue** is a lightweight, life-saving plugin designed to help you recover your WordPress site when you are locked out of the admin panel due to a fatal error, "Critical Error," or the dreaded White Screen of Death (WSOD).
 
 It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *before* your active plugins, allowing you to selectively disable problematic plugins or themes by renaming their folders without needing FTP access.
 
@@ -31,13 +31,13 @@ While this plugin works as a standard plugin, it is **highly recommended** to in
 == Installation ==
 
 ### Standard Installation (Good)
-1.  Upload the `emergency-rescue.php` file to the `/wp-content/plugins/` directory.
+1.  Upload the `mrqurban-emergency-rescue.php` file to the `/wp-content/plugins/` directory.
 2.  Activate the plugin through the 'Plugins' menu in WordPress.
 3.  Go to **Tools > Emergency Rescue** to get your Secret URL.
 
 ### Must-Use (MU) Installation (Best - Recommended)
 To ensure the plugin works even when your site is crashing early:
-1.  Upload the `emergency-rescue.php` file to `/wp-content/mu-plugins/`.
+1.  Upload the `mrqurban-emergency-rescue.php` file to `/wp-content/mu-plugins/`.
 2.  If the `mu-plugins` folder does not exist, create it inside `wp-content`.
 3.  The plugin is automatically active. Access your dashboard to see the notice with your Secret URL.
 
