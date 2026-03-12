@@ -19,16 +19,19 @@ It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *b
 
 ## 🚀 Installation (Highly Recommended)
 
-To ensure this plugin works even when your site is crashing, you should install it as a **Must-Use (MU) Plugin**.
+To ensure this plugin works even when your site is crashing, it should run as a **Must-Use (MU) Plugin**.
 
-1.  **Download** the plugin file `mrqurban-emergency-rescue.php`.
-2.  Access your site via **FTP** or your hosting **File Manager**.
-3.  Navigate to `wp-content/`.
-4.  Check for a folder named `mu-plugins`. If it doesn't exist, **create it**.
-5.  **Upload/Move** `mrqurban-emergency-rescue.php` directly into `wp-content/mu-plugins/`.
-    *   *Important:* Do not put it inside a subfolder (e.g., `mu-plugins/mrqurban-emergency-rescue/mrqurban-emergency-rescue.php` will NOT work without a loader). It must be `wp-content/mu-plugins/mrqurban-emergency-rescue.php`.
+### Option 1: Standard Plugin Upload (Easiest)
+1.  Download the plugin zip file.
+2.  Go to **Plugins > Add New** in your WordPress dashboard and upload the zip.
+3.  **Activate** the plugin. It will automatically detect its location and install a loader in the `mu-plugins` directory for you.
 
-*(Note: You can also install it as a regular plugin in `wp-content/plugins/`, but it might not load early enough to catch all fatal errors.)*
+### Option 2: Manual MU-Plugin Setup
+1.  Access your site via **FTP** or your hosting **File Manager**.
+2.  Navigate to `wp-content/mu-plugins/`. (Create the folder if it doesn't exist).
+3.  Upload the `mrqurban-emergency-rescue.php` file directly into that folder.
+
+*(Note: If installed as a regular plugin without the MU loader, it might not load early enough to catch all fatal errors.)*
 
 ## 📖 Usage
 

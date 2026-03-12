@@ -1,0 +1,53 @@
+/*
+ * Admin Page Stylesheet
+ * MQurban Emergency Rescue Plugin
+ */
+
+/* Card overrides — constrain width and add spacing */
+.wper-card {
+	max-width: 800px;
+	padding: 20px;
+	margin-top: 20px;
+}
+
+/* Logs toolbar: space between filter form and clear button */
+.wper-logs-toolbar {
+	margin-bottom: 15px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+/* Wrapper to zero out the default submit_button margin */
+.wper-clear-btn-wrap .button {
+	margin: 0;
+}
+
+/* Column widths in the activity log table */
+.wper-col-time {
+	width: 180px;
+}
+
+.wper-col-ip {
+	width: 120px;
+}
+
+/* Debug log textarea on the admin page (shared class with rescue page) */
+.wper-log-textarea {
+	width: 100%;
+	height: 300px;
+	font-family: monospace;
+	font-size: 12px;
+	background: #f0f0f1;
+	border: 1px solid #ddd;
+	padding: 10px;
+	white-space: pre;
+	box-sizing: border-box;
+	resize: vertical;
+}
+
+/* Dismiss notice link in the admin notice banner */
+.wper-dismiss-link {
+	text-decoration: none;
+	font-size: 0.9em;
+}

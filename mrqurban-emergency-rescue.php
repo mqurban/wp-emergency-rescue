@@ -7,7 +7,6 @@
  * Author URI: https://mqurban.com
  * License: GPLv2 or later
  * Text Domain: mrqurban-emergency-rescue
- * Domain Path: /languages
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,124 +20,112 @@ class WPER_Emergency_Rescue {
     private $dismiss_option = 'wper_notice_dismissed';
 
     public function __construct() {
-        // Step 0: Handle Debug Mode (Must be first to catch early errors)
         $this->handle_debug_mode();
-
-        // Step 1: Initialize
-        // Check for rescue mode immediately (for mu-plugin support)
         $this->check_rescue_mode();
-        
-        // Step 2: Hooks for normal operation (generating key, showing notice)
-        // We use admin_init to ensure all WP functions (like pluggable.php) are loaded
+
         add_action( 'admin_init', array( $this, 'generate_key_if_missing' ) );
-        add_action( 'admin_init', array( $this, 'handle_admin_actions' ) ); // Handle dismissal and settings save
+        add_action( 'admin_init', array( $this, 'handle_admin_actions' ) );
         add_action( 'admin_notices', array( $this, 'show_secret_key' ) );
         add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_styles' ) );
     }
 
     /**
-     * Handle Debug Mode toggles.
-     * Sets cookies and applies debug constants/ini settings.
+     * Enqueue admin stylesheet on all admin pages for manage_options users.
+     * The notice banner (.wper-dismiss-link) can appear on any admin page.
+     *
+     * @param string $hook The current admin page hook suffix.
+     */
+    public function enqueue_admin_styles( $hook ) {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        wp_enqueue_style(
+            'mrqurban-emergency-rescue-admin',
+            plugins_url( 'assets/admin.css', __FILE__ ),
+            array(),
+            '1.1.0'
+        );
+    }
+
+    /**
+     * Handle debug mode toggles via the rescue interface cookie.
+     * Toggles a cookie that controls the debug log viewer on the rescue page.
+     *
+     * phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Rescue key serves as authentication.
      */
     private function handle_debug_mode() {
         $secret_key = get_option( $this->option_name );
         $cookie_val = md5( $secret_key );
 
-        // Handle Toggles via GET request (Only if rescue key is present and correct)
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Rescue key serves as authentication.
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         if ( isset( $_GET[ $this->param_name ] ) && sanitize_text_field( wp_unslash( $_GET[ $this->param_name ] ) ) === $secret_key ) {
             if ( isset( $_GET['wper_debug_toggle'] ) ) {
-                $toggle = sanitize_key( $_GET['wper_debug_toggle'] );
+                $toggle      = sanitize_key( $_GET['wper_debug_toggle'] );
                 $cookie_name = 'wper_debug_' . $toggle;
-                
-                // Toggle the cookie value (cookie_val or empty)
-                $current = isset( $_COOKIE[ $cookie_name ] ) ? $_COOKIE[ $cookie_name ] : '';
-                $new_val = ( $current === $cookie_val ) ? '' : $cookie_val;
-                
-                // Set cookie for 1 hour
-                // Note: COOKIEPATH and COOKIE_DOMAIN might not be defined yet in mu-plugins
+                $current     = isset( $_COOKIE[ $cookie_name ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ $cookie_name ] ) ) : '';
+                $new_val     = ( $current === $cookie_val ) ? '' : $cookie_val;
+
                 setcookie( $cookie_name, $new_val, time() + 3600, '/' );
-                $_COOKIE[ $cookie_name ] = $new_val; // Update current request
-                
-                // Redirect to remove the toggle param
+                $_COOKIE[ $cookie_name ] = $new_val;
+
                 $url = remove_query_arg( 'wper_debug_toggle' );
-                header( "Location: $url" );
+                header( 'Location: ' . esc_url_raw( $url ) );
                 exit;
             }
         }
 
-        // Apply Settings based on Cookies (Check validity)
-        $debug_log = isset( $_COOKIE['wper_debug_log'] ) && $_COOKIE['wper_debug_log'] === $cookie_val;
-
-        if ( $debug_log ) {
-            // Try to define constants if not already defined
-            if ( ! defined( 'WP_DEBUG' ) ) {
-                define( 'WP_DEBUG', true );
-            }
-        }
-
-        if ( $debug_log ) {
-            if ( ! defined( 'WP_DEBUG_LOG' ) ) {
-                define( 'WP_DEBUG_LOG', true );
-            }
-            @ini_set( 'log_errors', 1 );
-            // Ensure we know where the log goes if WP hasn't set it
-            if ( defined( 'WP_CONTENT_DIR' ) ) {
-                @ini_set( 'error_log', WP_CONTENT_DIR . '/debug.log' );
-            }
-        }
     }
 
     /**
-     * Get the last N bytes of the debug.log file and reverse lines.
+     * Get the last N bytes of the debug.log file, reversed so newest entries appear first.
      */
     private function get_debug_log_content( $max_size = 20480 ) {
         $log_file = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/debug.log' : ABSPATH . 'wp-content/debug.log';
-        
+
         if ( ! file_exists( $log_file ) ) {
-            return sprintf( esc_html__( "Debug log file not found at %s. Enable 'Debug Log (File)' and trigger an error to create it.", 'mrqurban-emergency-rescue' ), basename($log_file) );
+            return sprintf( esc_html__( "Debug log file not found at %s. Enable 'Debug Log (File)' and trigger an error to create it.", 'mrqurban-emergency-rescue' ), basename( $log_file ) );
         }
-        
+
         if ( ! is_readable( $log_file ) ) {
-            return esc_html__( "Debug log file exists but is not readable.", 'mrqurban-emergency-rescue' );
+            return esc_html__( 'Debug log file exists but is not readable.', 'mrqurban-emergency-rescue' );
         }
 
         $fp = fopen( $log_file, 'r' );
-        if ( ! $fp ) return esc_html__( "Cannot open log file.", 'mrqurban-emergency-rescue' );
-        
+        if ( ! $fp ) {
+            return esc_html__( 'Cannot open log file.', 'mrqurban-emergency-rescue' );
+        }
+
         fseek( $fp, 0, SEEK_END );
         $size = ftell( $fp );
-        
+
         if ( $size === 0 ) {
             fclose( $fp );
-            return esc_html__( "Debug log file is empty.", 'mrqurban-emergency-rescue' );
+            return esc_html__( 'Debug log file is empty.', 'mrqurban-emergency-rescue' );
         }
 
         $seek = max( 0, $size - $max_size );
         fseek( $fp, $seek );
-        
-        // Discard first partial line if we seeked
+
         if ( $seek > 0 ) {
-            fgets( $fp ); 
+            fgets( $fp );
         }
 
         $content = fread( $fp, $max_size );
         fclose( $fp );
-        
-        // Reverse lines for better readability (Newest first)
+
         $lines = explode( "\n", $content );
         $lines = array_reverse( array_filter( $lines ) );
-        
-        return htmlspecialchars( implode( "\n", $lines ) );
+
+        return implode( "\n", $lines );
     }
 
     /**
-     * Generate a secret key if one doesn't exist.
-     * Hooked to admin_init to ensure random functions are available.
+     * Generate a secret key if one does not already exist.
+     * Hooked to admin_init to ensure pluggable functions are loaded.
      */
     public function generate_key_if_missing() {
         if ( ! get_option( $this->option_name ) ) {
-            // wp_generate_password is in pluggable.php, which is loaded by now
             $key = wp_generate_password( 32, false );
             update_option( $this->option_name, $key );
         }
@@ -161,13 +148,17 @@ class WPER_Emergency_Rescue {
      * Render the settings page in WP Admin.
      */
     public function render_settings_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
         $key = get_option( $this->option_name );
         $url = home_url( '/?' . $this->param_name . '=' . $key );
         ?>
         <div class="wrap">
             <h1>🚑 <?php esc_html_e( 'Emergency Rescue Settings', 'mrqurban-emergency-rescue' ); ?></h1>
-            
-            <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+
+            <div class="card wper-card">
                 <h2><?php esc_html_e( 'Your Emergency Rescue URL', 'mrqurban-emergency-rescue' ); ?></h2>
                 <p><?php esc_html_e( 'Use this URL to access the recovery interface if your site crashes and you cannot access the admin panel.', 'mrqurban-emergency-rescue' ); ?></p>
                 <p>
@@ -176,12 +167,12 @@ class WPER_Emergency_Rescue {
                 <p class="description"><strong><?php esc_html_e( 'Tip:', 'mrqurban-emergency-rescue' ); ?></strong> <?php esc_html_e( 'Bookmark this URL now.', 'mrqurban-emergency-rescue' ); ?></p>
             </div>
 
-            <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+            <div class="card wper-card">
                 <h2><?php esc_html_e( 'Custom Configuration', 'mrqurban-emergency-rescue' ); ?></h2>
                 <form method="post" action="">
                     <?php wp_nonce_field( 'wper_save_settings', 'wper_nonce' ); ?>
                     <input type="hidden" name="action" value="wper_save_settings">
-                    
+
                     <table class="form-table">
                         <tr>
                             <th scope="row"><label for="custom_secret_key"><?php esc_html_e( 'Secret Key', 'mrqurban-emergency-rescue' ); ?></label></th>
@@ -191,21 +182,21 @@ class WPER_Emergency_Rescue {
                             </td>
                         </tr>
                     </table>
-                    
+
                     <?php submit_button( esc_html__( 'Save Changes', 'mrqurban-emergency-rescue' ) ); ?>
                 </form>
             </div>
 
-            <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+            <div class="card wper-card">
                 <h2><?php esc_html_e( 'Activity Logs', 'mrqurban-emergency-rescue' ); ?></h2>
-                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <div class="wper-logs-toolbar">
                     <form method="get" action="">
                         <input type="hidden" name="page" value="mrqurban-emergency-rescue">
                         <label for="wper_log_limit"><?php esc_html_e( 'Show last:', 'mrqurban-emergency-rescue' ); ?> </label>
                         <select name="limit" id="wper_log_limit" onchange="this.form.submit()">
-                            <?php 
+                            <?php
                             // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- View preference only.
-                            $limit = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : 10;
+                            $limit   = isset( $_GET['limit'] ) ? intval( $_GET['limit'] ) : 10;
                             $options = array( 10, 25, 50, 100 );
                             foreach ( $options as $opt ) {
                                 echo '<option value="' . esc_attr( $opt ) . '" ' . selected( $limit, $opt, false ) . '>' . sprintf( esc_html__( '%d entries', 'mrqurban-emergency-rescue' ), esc_html( $opt ) ) . '</option>';
@@ -213,40 +204,39 @@ class WPER_Emergency_Rescue {
                             ?>
                         </select>
                     </form>
-                    
-                    <form method="post" action="" onsubmit="return confirm('<?php esc_attr_e( 'Are you sure you want to clear all logs?', 'mrqurban-emergency-rescue' ); ?>');">
+
+                    <form method="post" action="" onsubmit="return confirm('<?php esc_attr_e( 'Are you sure you want to clear all logs?', 'mrqurban-emergency-rescue' ); ?>');"><div class="wper-clear-btn-wrap">
                         <?php wp_nonce_field( 'wper_clear_logs', 'wper_nonce' ); ?>
                         <input type="hidden" name="action" value="wper_clear_logs">
-                        <?php submit_button( esc_html__( 'Clear Logs', 'mrqurban-emergency-rescue' ), 'delete', 'submit', false, array( 'style' => 'margin:0;' ) ); ?>
-                    </form>
+                        <?php submit_button( esc_html__( 'Clear Logs', 'mrqurban-emergency-rescue' ), 'delete wper-clear-btn', 'submit', false ); ?>
+                    </div></form>
                 </div>
 
                 <table class="widefat striped">
                     <thead>
                         <tr>
-                            <th style="width: 180px;"><?php esc_html_e( 'Time', 'mrqurban-emergency-rescue' ); ?></th>
+                            <th class="wper-col-time"><?php esc_html_e( 'Time', 'mrqurban-emergency-rescue' ); ?></th>
                             <th><?php esc_html_e( 'Action / Message', 'mrqurban-emergency-rescue' ); ?></th>
-                            <th style="width: 120px;"><?php esc_html_e( 'IP Address', 'mrqurban-emergency-rescue' ); ?></th>
+                            <th class="wper-col-ip"><?php esc_html_e( 'IP Address', 'mrqurban-emergency-rescue' ); ?></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php 
+                        <?php
                         $logs = $this->get_logs( $limit );
                         if ( empty( $logs ) ) : ?>
                             <tr><td colspan="3"><?php esc_html_e( 'No activity logs found.', 'mrqurban-emergency-rescue' ); ?></td></tr>
                         <?php else : ?>
-                            <?php foreach ( $logs as $log ) : 
-                                // Basic parsing: "DATE TIME - Message - IP: IP"
+                            <?php foreach ( $logs as $log ) :
                                 $parts = explode( ' - ', $log );
                                 if ( count( $parts ) >= 3 ) {
-                                    $time = array_shift( $parts );
+                                    $time    = array_shift( $parts );
                                     $ip_part = array_pop( $parts );
-                                    $ip = str_replace( 'IP: ', '', $ip_part );
+                                    $ip      = str_replace( 'IP: ', '', $ip_part );
                                     $message = implode( ' - ', $parts );
                                 } else {
-                                    $time = '';
+                                    $time    = '';
                                     $message = $log;
-                                    $ip = '';
+                                    $ip      = '';
                                 }
                             ?>
                                 <tr>
@@ -264,32 +254,31 @@ class WPER_Emergency_Rescue {
     }
 
     /**
-     * Handle admin actions (Settings save, Notice dismissal).
+     * Handle admin actions: notice dismissal, settings save, and log clearing.
      */
     public function handle_admin_actions() {
-        // Handle Notice Dismissal
         if ( isset( $_GET['wper_dismiss'] ) && check_admin_referer( 'wper_dismiss_notice' ) ) {
+            if ( ! current_user_can( 'manage_options' ) ) {
+                wp_die( esc_html__( 'You do not have permission to perform this action.', 'mrqurban-emergency-rescue' ) );
+            }
             update_user_meta( get_current_user_id(), $this->dismiss_option, true );
             wp_safe_redirect( remove_query_arg( array( 'wper_dismiss', '_wpnonce' ) ) );
             exit;
         }
 
-        // Handle Settings Save
-        if ( isset( $_POST['action'] ) && $_POST['action'] === 'wper_save_settings' ) {
+        if ( isset( $_POST['action'] ) && sanitize_text_field( wp_unslash( $_POST['action'] ) ) === 'wper_save_settings' ) {
             if ( ! current_user_can( 'manage_options' ) ) {
                 return;
             }
-            
+
             if ( ! isset( $_POST['wper_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wper_nonce'] ) ), 'wper_save_settings' ) ) {
                 return;
             }
 
             if ( ! empty( $_POST['custom_secret_key'] ) ) {
-                // Sanitize: Allow alphanumeric and common safe chars
                 $new_key = sanitize_text_field( wp_unslash( $_POST['custom_secret_key'] ) );
-                // Ensure no spaces
                 $new_key = str_replace( ' ', '', $new_key );
-                
+
                 if ( ! empty( $new_key ) ) {
                     update_option( $this->option_name, $new_key );
                     add_settings_error( 'wper_messages', 'wper_saved', esc_html__( 'Settings Saved. Your Rescue URL has been updated.', 'mrqurban-emergency-rescue' ), 'success' );
@@ -297,12 +286,11 @@ class WPER_Emergency_Rescue {
             }
         }
 
-        // Handle Clear Logs
-        if ( isset( $_POST['action'] ) && $_POST['action'] === 'wper_clear_logs' ) {
+        if ( isset( $_POST['action'] ) && sanitize_text_field( wp_unslash( $_POST['action'] ) ) === 'wper_clear_logs' ) {
             if ( ! current_user_can( 'manage_options' ) ) {
                 return;
             }
-            
+
             if ( ! isset( $_POST['wper_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wper_nonce'] ) ), 'wper_clear_logs' ) ) {
                 return;
             }
@@ -316,14 +304,14 @@ class WPER_Emergency_Rescue {
     }
 
     /**
-     * Get the path to the log file.
+     * Get the absolute path to the plugin activity log file.
      */
     private function get_log_file_path() {
         return dirname( __FILE__ ) . '/rescue_log.txt';
     }
 
     /**
-     * Get logs with pagination limit.
+     * Get the most recent log entries up to the given limit.
      */
     private function get_logs( $limit = 10 ) {
         $log_file = $this->get_log_file_path();
@@ -336,74 +324,64 @@ class WPER_Emergency_Rescue {
             return array();
         }
 
-        // Split by newline and remove empty lines
         $lines = array_filter( explode( "\n", $content ) );
-        
-        // Reverse to show newest first
         $lines = array_reverse( $lines );
-        
-        // Slice to limit
+
         return array_slice( $lines, 0, $limit );
     }
 
     /**
-     * Show the secret URL to the admin.
+     * Show the secret rescue URL in an admin notice banner.
      */
     public function show_secret_key() {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
 
-        // Check if dismissed
         if ( get_user_meta( get_current_user_id(), $this->dismiss_option, true ) ) {
             return;
         }
 
         $key = get_option( $this->option_name );
         if ( $key ) {
-            $url = home_url( '/?' . $this->param_name . '=' . $key );
+            $url         = home_url( '/?' . $this->param_name . '=' . $key );
             $dismiss_url = wp_nonce_url( add_query_arg( 'wper_dismiss', '1' ), 'wper_dismiss_notice' );
             ?>
             <div class="notice notice-warning is-dismissible">
                 <p><strong>🚑 <?php esc_html_e( 'Emergency Rescue:', 'mrqurban-emergency-rescue' ); ?></strong> <?php esc_html_e( 'Save this URL to recover your site if it crashes:', 'mrqurban-emergency-rescue' ); ?></p>
                 <p><code><a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $url ); ?></a></code></p>
-                <p><a href="<?php echo esc_url( $dismiss_url ); ?>" style="text-decoration:none; font-size: 0.9em;"><?php esc_html_e( 'Dismiss this notice permanently', 'mrqurban-emergency-rescue' ); ?></a> <?php esc_html_e( '(You can always find this in Tools > Emergency Rescue)', 'mrqurban-emergency-rescue' ); ?></p>
+                <p><a href="<?php echo esc_url( $dismiss_url ); ?>" class="wper-dismiss-link"><?php esc_html_e( 'Dismiss this notice permanently', 'mrqurban-emergency-rescue' ); ?></a> <?php esc_html_e( '(You can always find this in Tools > Emergency Rescue)', 'mrqurban-emergency-rescue' ); ?></p>
             </div>
             <?php
         }
     }
 
     /**
-     * Check if the rescue key is present in the URL.
+     * Check if the rescue key is present in the URL and enter rescue mode if valid.
      */
     private function check_rescue_mode() {
         if ( isset( $_GET[ $this->param_name ] ) ) {
-            // Basic sanitization: Allow standard URL-safe characters
-            $key = sanitize_text_field( wp_unslash( $_GET[ $this->param_name ] ) );
+            $key        = sanitize_text_field( wp_unslash( $_GET[ $this->param_name ] ) );
             $stored_key = get_option( $this->option_name );
 
-            // If key matches, enter rescue mode
             if ( $stored_key && $key === $stored_key ) {
                 $this->render_rescue_page();
-                exit; // Stop WordPress from loading further
+                exit;
             }
         }
     }
 
     /**
-     * Render the rescue interface.
+     * Render the standalone rescue interface HTML page.
      */
     private function render_rescue_page() {
-        // Handle any actions (rename/restore) before rendering
         $this->handle_actions();
 
-        // Determine Theme Directory safely (get_theme_root might not be loaded)
         $theme_dir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/themes' : ABSPATH . 'wp-content/themes';
         if ( function_exists( 'get_theme_root' ) ) {
             $theme_dir = get_theme_root();
         }
-        
-        // Plugin Directory
+
         $plugin_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
 
         ?>
@@ -412,74 +390,51 @@ class WPER_Emergency_Rescue {
         <head>
             <title><?php esc_html_e( 'Emergency Rescue', 'mrqurban-emergency-rescue' ); ?></title>
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background: #f0f0f1; color: #3c434a; padding: 20px; line-height: 1.5; }
-                .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 5px; }
-                h1 { color: #d63638; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-                h2 { margin-top: 30px; font-size: 1.3em; }
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #e5e5e5; }
-                th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e5e5e5; }
-                th { background: #f9f9f9; font-weight: 600; }
-                tr:hover { background: #fafafa; }
-                .btn { display: inline-block; padding: 6px 12px; text-decoration: none; border-radius: 3px; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
-                .btn-danger { background: #d63638; color: #fff; border-color: #d63638; }
-                .btn-danger:hover { background: #b32d2e; border-color: #b32d2e; }
-                .btn-primary { background: #2271b1; color: #fff; border-color: #2271b1; }
-                .btn-primary:hover { background: #135e96; border-color: #135e96; }
-                .btn-secondary { background: #f6f7f7; color: #2c3338; border-color: #dcdcde; }
-                .btn-secondary:hover { background: #f0f0f1; border-color: #c3c4c7; }
-                .status-active { color: #007017; font-weight: bold; background: #edfaef; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; }
-                .status-disabled { color: #d63638; font-weight: bold; background: #fbeaea; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; }
-                .message { padding: 12px; margin-bottom: 20px; border-left: 4px solid; box-shadow: 0 1px 1px rgba(0,0,0,0.04); }
-                .message.success { border-color: #46b450; background: #fff; }
-                .message.error { border-color: #d63638; background: #fff; }
-                code { background: #f0f0f1; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-                .footer { margin-top: 40px; font-size: 0.9em; color: #646970; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
-            </style>
+            <link rel="stylesheet" href="<?php echo esc_url( plugins_url( 'assets/rescue-page.css', __FILE__ ) . '?ver=1.1.0' ); ?>">
         </head>
         <body>
             <div class="container">
                 <h1>🚑 <?php esc_html_e( 'Emergency Rescue', 'mrqurban-emergency-rescue' ); ?></h1>
                 <p><?php esc_html_e( 'Welcome to the emergency recovery mode. Here you can selectively disable plugins or themes by renaming their folders.', 'mrqurban-emergency-rescue' ); ?></p>
-                
-                <div style="margin-bottom: 20px;">
+
+                <div class="wper-action-links">
                     <a href="<?php echo esc_url( admin_url() ); ?>" class="btn btn-primary" target="_blank"><?php esc_html_e( 'Try Loading WP Admin', 'mrqurban-emergency-rescue' ); ?> &nearr;</a>
                     <a href="<?php echo esc_url( home_url() ); ?>" class="btn btn-secondary" target="_blank"><?php esc_html_e( 'View Site', 'mrqurban-emergency-rescue' ); ?> &nearr;</a>
                 </div>
 
-                <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-left: 4px solid #2271b1; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                    <h3 style="margin-top:0;">🔧 <?php esc_html_e( 'Debug Tools', 'mrqurban-emergency-rescue' ); ?></h3>
+                <div class="wper-info-box">
+                    <h3 class="wper-box-title">🔧 <?php esc_html_e( 'Debug Tools', 'mrqurban-emergency-rescue' ); ?></h3>
                     <p><?php esc_html_e( 'Toggle debugging options for this session:', 'mrqurban-emergency-rescue' ); ?></p>
                     <?php
-                    $debug_display = isset( $_COOKIE['wper_debug_display'] ) && $_COOKIE['wper_debug_display'];
-                    $debug_log     = isset( $_COOKIE['wper_debug_log'] ) && $_COOKIE['wper_debug_log'];
+                    $secret_key_hash  = md5( get_option( $this->option_name ) );
+                    $debug_log_cookie = isset( $_COOKIE['wper_debug_log'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wper_debug_log'] ) ) : '';
+                    $debug_log        = ( $debug_log_cookie === $secret_key_hash );
                     
-                    // Build toggle URLs
-                    // We must preserve the secret key which is in $_GET
-                    $current_url = set_url_scheme( 'http://' . sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) . wp_unslash( $_SERVER['REQUEST_URI'] ) );
+                    // Sanitize current URL for toggle links.
+                    $current_url = set_url_scheme( 'http://' . sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) . esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
                     $url_log     = add_query_arg( 'wper_debug_toggle', 'log', $current_url );
                     ?>
-                    
+
                     <a href="<?php echo esc_url( $url_log ); ?>" class="btn <?php echo $debug_log ? 'btn-primary' : 'btn-secondary'; ?>">
                         <?php echo $debug_log ? esc_html__( 'Disable', 'mrqurban-emergency-rescue' ) : esc_html__( 'Enable', 'mrqurban-emergency-rescue' ); ?> <?php esc_html_e( 'Debug Log (File)', 'mrqurban-emergency-rescue' ); ?>
                     </a>
                 </div>
 
                 <?php if ( $debug_log ) : ?>
-                <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-left: 4px solid #2271b1; box-shadow: 0 1px 1px rgba(0,0,0,0.04);">
-                    <h3 style="margin-top:0;">📄 <?php esc_html_e( 'Debug Log Viewer', 'mrqurban-emergency-rescue' ); ?></h3>
+                <div class="wper-info-box">
+                    <h3 class="wper-box-title">📄 <?php esc_html_e( 'Debug Log Viewer', 'mrqurban-emergency-rescue' ); ?></h3>
                     <p><?php printf( esc_html__( 'Last %s of %s:', 'mrqurban-emergency-rescue' ), '20KB', '<code>debug.log</code>' ); ?></p>
-                    <textarea style="width:100%; height: 300px; font-family: monospace; font-size: 12px; background: #f0f0f1; border: 1px solid #ddd; padding: 10px; white-space: pre;" readonly><?php echo $this->get_debug_log_content(); ?></textarea>
-                    <p style="text-align: right; margin-top: 5px;"><a href="<?php echo esc_url( remove_query_arg( 'wper_test_error', $current_url ) ); ?>" class="btn btn-secondary"><?php esc_html_e( 'Refresh Log', 'mrqurban-emergency-rescue' ); ?></a></p>
+                    <textarea class="wper-log-textarea" readonly><?php echo esc_textarea( $this->get_debug_log_content() ); ?></textarea>
+                    <p class="wper-log-refresh"><a href="<?php echo esc_url( remove_query_arg( 'wper_test_error', $current_url ) ); ?>" class="btn btn-secondary"><?php esc_html_e( 'Refresh Log', 'mrqurban-emergency-rescue' ); ?></a></p>
                 </div>
                 <?php endif; ?>
-                
+
                 <?php if ( ! empty( $_GET['msg'] ) ) : ?>
-                    <div class="message success"><?php echo esc_html( urldecode( sanitize_text_field( wp_unslash( $_GET['msg'] ) ) ) ); ?></div>
+                    <div class="message success"><?php echo esc_html( sanitize_text_field( wp_unslash( $_GET['msg'] ) ) ); ?></div>
                 <?php endif; ?>
 
                 <?php if ( ! empty( $_GET['error'] ) ) : ?>
-                    <div class="message error"><?php echo esc_html( urldecode( sanitize_text_field( wp_unslash( $_GET['error'] ) ) ) ); ?></div>
+                    <div class="message error"><?php echo esc_html( sanitize_text_field( wp_unslash( $_GET['error'] ) ) ); ?></div>
                 <?php endif; ?>
 
                 <h2><?php esc_html_e( 'Plugins', 'mrqurban-emergency-rescue' ); ?></h2>
@@ -487,9 +442,14 @@ class WPER_Emergency_Rescue {
 
                 <h2><?php esc_html_e( 'Themes', 'mrqurban-emergency-rescue' ); ?></h2>
                 <?php $this->list_items( $theme_dir, 'theme' ); ?>
-                
+
                 <div class="footer">
-                    <p><?php esc_html_e( 'Generated by Emergency Rescue', 'mrqurban-emergency-rescue' ); ?> &bull; <a href="?<?php echo $this->param_name . '=' . esc_attr( $_GET[ $this->param_name ] ); ?>"><?php esc_html_e( 'Refresh Page', 'mrqurban-emergency-rescue' ); ?></a></p>
+                    <?php
+                    // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Rescue key used for authentication.
+                    $rescue_key_val = isset( $_GET[ $this->param_name ] ) ? sanitize_text_field( wp_unslash( $_GET[ $this->param_name ] ) ) : '';
+                    $refresh_url    = add_query_arg( $this->param_name, $rescue_key_val, home_url( '/' ) );
+                    ?>
+                    <p><?php esc_html_e( 'Generated by Emergency Rescue', 'mrqurban-emergency-rescue' ); ?> &bull; <a href="<?php echo esc_url( $refresh_url ); ?>"><?php esc_html_e( 'Refresh Page', 'mrqurban-emergency-rescue' ); ?></a></p>
                 </div>
             </div>
         </body>
@@ -498,7 +458,7 @@ class WPER_Emergency_Rescue {
     }
 
     /**
-     * List items in a directory.
+     * List plugins or themes in a directory as an HTML table with enable/disable actions.
      */
     private function list_items( $directory, $type ) {
         if ( ! is_dir( $directory ) ) {
@@ -516,37 +476,35 @@ class WPER_Emergency_Rescue {
 
         foreach ( $items as $item ) {
             if ( $item === '.' || $item === '..' || $item === 'index.php' || $item === '.DS_Store' ) continue;
-            
+
             $path = trailingslashit( $directory ) . $item;
-            if ( ! is_dir( $path ) && $type === 'theme' ) continue; // Themes must be directories
-            
-            // Basic detection of disabled items (renamed with .off suffix)
-            $is_disabled = ( substr( $item, -4 ) === '.off' );
+            if ( ! is_dir( $path ) && $type === 'theme' ) continue;
+
+            $is_disabled  = ( substr( $item, -4 ) === '.off' );
             $display_name = $is_disabled ? substr( $item, 0, -4 ) : $item;
-            
+
             echo '<tr>';
-            echo '<td><strong>' . esc_html( $display_name ) . '</strong><br><small style="color:#666">' . esc_html( $item ) . '</small></td>';
+            echo '<td><strong>' . esc_html( $display_name ) . '</strong><br><small class="wper-folder-name">' . esc_html( $item ) . '</small></td>';
             echo '<td>' . ( $is_disabled ? '<span class="status-disabled">' . esc_html__( 'Disabled', 'mrqurban-emergency-rescue' ) . '</span>' : '<span class="status-active">' . esc_html__( 'Active', 'mrqurban-emergency-rescue' ) . '</span>' ) . '</td>';
             echo '<td>';
-            
-            // Calculate new name
-            $new_name = $is_disabled ? $display_name : $item . '.off';
+
+            $new_name     = $is_disabled ? $display_name : $item . '.off';
             $action_label = $is_disabled ? esc_html__( 'Restore (Enable)', 'mrqurban-emergency-rescue' ) : esc_html__( 'Disable (Rename)', 'mrqurban-emergency-rescue' );
-            $btn_class = $is_disabled ? 'btn-primary' : 'btn-danger';
-            
-            // Build Action URL
-            // We must preserve the secret key
-            $current_url = set_url_scheme( 'http://' . sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) . wp_unslash( $_SERVER['REQUEST_URI'] ) );
-            $url = add_query_arg( array(
-                $this->param_name => sanitize_text_field( wp_unslash( $_GET[ $this->param_name ] ) ), // Keep secret key
-                'action'   => 'rename',
-                'type'     => $type,
-                'target'   => $item,
-                'new_name' => $new_name
+            $btn_class    = $is_disabled ? 'btn-primary' : 'btn-danger';
+
+            // Sanitize current URL to build the rename action link.
+            $rescue_key_safe = isset( $_GET[ $this->param_name ] ) ? sanitize_text_field( wp_unslash( $_GET[ $this->param_name ] ) ) : '';
+            $current_url     = set_url_scheme( 'http://' . sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) . esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
+            $url             = add_query_arg( array(
+                $this->param_name => $rescue_key_safe,
+                'action'          => 'rename',
+                'type'            => $type,
+                'target'          => $item,
+                'new_name'        => $new_name,
             ), $current_url );
 
             echo '<a href="' . esc_url( $url ) . '" class="btn ' . esc_attr( $btn_class ) . '" onclick="return confirm(\'' . esc_js( sprintf( esc_html__( 'Are you sure you want to %s?', 'mrqurban-emergency-rescue' ), esc_html( strtolower( $action_label ) ) ) ) . '\');">' . esc_html( $action_label ) . '</a>';
-            
+
             echo '</td>';
             echo '</tr>';
         }
@@ -554,21 +512,18 @@ class WPER_Emergency_Rescue {
     }
 
     /**
-     * Handle rename actions.
+     * Handle plugin/theme rename (enable/disable) actions from the rescue interface.
      */
     private function handle_actions() {
-        if ( isset( $_GET['action'] ) && $_GET['action'] === 'rename' && isset( $_GET['target'] ) && isset( $_GET['new_name'] ) ) {
-            
-            $type = isset( $_GET['type'] ) ? sanitize_text_field( wp_unslash( $_GET['type'] ) ) : 'plugin';
-            
-            // Security: Sanitize filenames strictly to prevent directory traversal
-            $target = sanitize_file_name( wp_unslash( $_GET['target'] ) );
+        if ( isset( $_GET['action'] ) && sanitize_text_field( wp_unslash( $_GET['action'] ) ) === 'rename' && isset( $_GET['target'] ) && isset( $_GET['new_name'] ) ) {
+
+            $type     = isset( $_GET['type'] ) ? sanitize_text_field( wp_unslash( $_GET['type'] ) ) : 'plugin';
+            $target   = sanitize_file_name( wp_unslash( $_GET['target'] ) );
             $new_name = sanitize_file_name( wp_unslash( $_GET['new_name'] ) );
-            
-            // Determine base directory again
+
             if ( $type === 'theme' ) {
-                 $base_dir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/themes' : ABSPATH . 'wp-content/themes';
-                 if ( function_exists( 'get_theme_root' ) ) $base_dir = get_theme_root();
+                $base_dir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/themes' : ABSPATH . 'wp-content/themes';
+                if ( function_exists( 'get_theme_root' ) ) $base_dir = get_theme_root();
             } else {
                 $base_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
             }
@@ -576,7 +531,6 @@ class WPER_Emergency_Rescue {
             $old_path = trailingslashit( $base_dir ) . $target;
             $new_path = trailingslashit( $base_dir ) . $new_name;
 
-            // Verify paths exist and are valid
             if ( ! file_exists( $old_path ) ) {
                 $this->redirect_with_msg( '', esc_html__( 'Target file does not exist.', 'mrqurban-emergency-rescue' ) );
             }
@@ -585,7 +539,6 @@ class WPER_Emergency_Rescue {
                 $this->redirect_with_msg( '', esc_html__( 'Destination already exists.', 'mrqurban-emergency-rescue' ) );
             }
 
-            // Perform Rename
             // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Standard PHP rename used for emergency recovery without WP_Filesystem dependencies.
             if ( rename( $old_path, $new_path ) ) {
                 $this->log_change( sprintf( "Renamed %s to %s (%s)", $target, $new_name, $type ) );
@@ -596,26 +549,28 @@ class WPER_Emergency_Rescue {
         }
     }
 
+    /**
+     * Redirect back to the rescue page with an optional success message or error.
+     */
     private function redirect_with_msg( $msg = '', $error = '' ) {
-        // We need to preserve the secret key in the URL
-        $current_url = set_url_scheme( 'http://' . sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) . wp_unslash( $_SERVER['REQUEST_URI'] ) );
-        
-        // Remove action parameters but keep the key
-        $url = remove_query_arg( array( 'action', 'target', 'new_name', 'type', 'msg', 'error' ), $current_url );
-        
-        if ( $msg ) $url = add_query_arg( 'msg', urlencode( $msg ), $url );
-        if ( $error ) $url = add_query_arg( 'error', urlencode( $error ), $url );
-        
-        // Use wp_safe_redirect if available, otherwise fallback (though at plugins_loaded it should be available)
+        $current_url = set_url_scheme( 'http://' . sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) . esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
+        $url         = remove_query_arg( array( 'action', 'target', 'new_name', 'type', 'msg', 'error' ), $current_url );
+
+        if ( $msg )   $url = add_query_arg( 'msg',   $msg,   $url );
+        if ( $error ) $url = add_query_arg( 'error', $error, $url );
+
         if ( function_exists( 'wp_safe_redirect' ) ) {
             wp_safe_redirect( $url );
         } else {
             // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- Fallback if WP functions not fully loaded.
-            header( "Location: $url" );
+            header( 'Location: ' . esc_url_raw( $url ) );
         }
         exit;
     }
 
+    /**
+     * Append a timestamped entry to the plugin activity log file.
+     */
     private function log_change( $message ) {
         $log_file = $this->get_log_file_path();
         // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- REMOTE_ADDR is server controlled.
@@ -624,5 +579,39 @@ class WPER_Emergency_Rescue {
     }
 }
 
-// Initialize the plugin
 new WPER_Emergency_Rescue();
+
+/**
+ * Handle plugin activation to automatically set it up as a Must-Use (MU) plugin.
+ */
+register_activation_hook( __FILE__, 'wper_setup_mu_plugin_loader' );
+
+function wper_setup_mu_plugin_loader() {
+    $mu_dir = WP_CONTENT_DIR . '/mu-plugins';
+    $loader_file = $mu_dir . '/mrqurban-emergency-rescue-loader.php';
+
+    // 1. Create mu-plugins directory if it doesn't exist.
+    if ( ! is_dir( $mu_dir ) ) {
+        if ( ! wp_mkdir_p( $mu_dir ) ) {
+            return; // Fail gracefully if we can't create the directory.
+        }
+    }
+
+    // 2. Prepare the loader content.
+    // We use the absolute path to this file to ensure the loader always finds it, 
+    // even if the plugin folder is renamed in /plugins/.
+    $plugin_path = var_export( __FILE__, true );
+    
+    $loader_content = "<?php\n" .
+        "/**\n" .
+        " * Loader for MrQurban Emergency Rescue (Must-Use Plugin)\n" .
+        " * Automatically generated upon plugin activation.\n" .
+        " */\n\n" .
+        "if ( file_exists( $plugin_path ) ) {\n" .
+        "    require_once $plugin_path;\n" .
+        "}\n";
+
+    // 3. Write the loader file.
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents -- Direct writing used for initial setup.
+    file_put_contents( $loader_file, $loader_content );
+}

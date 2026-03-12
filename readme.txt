@@ -1,6 +1,6 @@
 === MrQurban Emergency Rescue ===
 Contributors: Muhammad Qurban
-Tags: recovery, debug, white screen of death, fatal error, troubleshooting, emergency rescue
+Tags: recovery, debug, fatal-error, troubleshooting, rescue
 Requires at least: 5.0
 Tested up to: 6.9
 Stable tag: 1.1.0
@@ -35,11 +35,11 @@ While this plugin works as a standard plugin, it is **highly recommended** to in
 2.  Activate the plugin through the 'Plugins' menu in WordPress.
 3.  Go to **Tools > Emergency Rescue** to get your Secret URL.
 
-### Must-Use (MU) Installation (Best - Recommended)
+### Must-Use (MU) Installation (Recommended)
 To ensure the plugin works even when your site is crashing early:
-1.  Upload the `mrqurban-emergency-rescue.php` file to `/wp-content/mu-plugins/`.
-2.  If the `mu-plugins` folder does not exist, create it inside `wp-content`.
-3.  The plugin is automatically active. Access your dashboard to see the notice with your Secret URL.
+1.  Upload the plugin zip file through the standard **Plugins > Add New** menu.
+2.  **Activate** the plugin. It will automatically detect if it's in the standard plugins folder and set itself up as a Must-Use (MU) plugin automatically.
+3.  Alternatively, you can manually upload the `mrqurban-emergency-rescue.php` file to `/wp-content/mu-plugins/`.
 
 == Frequently Asked Questions ==
 
