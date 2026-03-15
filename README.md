@@ -11,7 +11,8 @@ It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *b
 *   **Fail-Safe Recovery**: Loads before standard plugins to bypass fatal errors.
 *   **Secret Access**: Protected by a unique, randomized secret key stored in your database.
 *   **One-Click Deactivation**: Instantly disable any plugin or theme by renaming its folder (appends `.off`).
-*   **Customizable Key**: Set your own memorable secret key (e.g., `my-rescue-pass`) via the settings menu.
+*   **Runtime Debugging**: Activate `WP_DEBUG_LOG` on demand even if it's disabled in `wp-config.php`, and view logs directly in the rescue page.
+*   **Customizable Key**: Set your own memorable secret key via the settings menu.
 *   **Activity Logging**: Tracks all rescue actions (renaming plugins/themes) with timestamps and IP addresses. Logs can be viewed and cleared from the settings page.
 *   **Admin Dashboard Integration**:
     *   Persistent access to your Rescue URL via **Tools > Emergency Rescue**.
@@ -21,10 +22,11 @@ It provides a **Secret Rescue URL** that loads a minimal, fail-safe interface *b
 
 To ensure this plugin works even when your site is crashing, it should run as a **Must-Use (MU) Plugin**.
 
-### Option 1: Standard Plugin Upload (Easiest)
+### Option 1: One-Click Setup (Recommended)
 1.  Download the plugin zip file.
 2.  Go to **Plugins > Add New** in your WordPress dashboard and upload the zip.
-3.  **Activate** the plugin. It will automatically detect its location and install a loader in the `mu-plugins` directory for you.
+3.  **Activate** the plugin. 
+4.  Navigate to **Tools > Emergency Rescue** and click the **"Enable Fail-Safe Mode"** button. This will automatically set up the needed loader in your `mu-plugins` directory.
 
 ### Option 2: Manual MU-Plugin Setup
 1.  Access your site via **FTP** or your hosting **File Manager**.

@@ -35,11 +35,12 @@ While this plugin works as a standard plugin, it is **highly recommended** to in
 2.  Activate the plugin through the 'Plugins' menu in WordPress.
 3.  Go to **Tools > Emergency Rescue** to get your Secret URL.
 
-### Must-Use (MU) Installation (Recommended)
+### Must-Use (MU) Installation / Fail-Safe Mode (Recommended)
 To ensure the plugin works even when your site is crashing early:
-1.  Upload the plugin zip file through the standard **Plugins > Add New** menu.
-2.  **Activate** the plugin. It will automatically detect if it's in the standard plugins folder and set itself up as a Must-Use (MU) plugin automatically.
-3.  Alternatively, you can manually upload the `mrqurban-emergency-rescue.php` file to `/wp-content/mu-plugins/`.
+1.  Upload and Activate the plugin as usual.
+2.  Go to **Tools > Emergency Rescue**.
+3.  Click the **"Enable Fail-Safe Mode"** button. This will safely create a loader file in your `/wp-content/mu-plugins/` directory.
+4.  If your hosting has restricted permissions, the plugin will provide instructions for a manual one-file upload.
 
 == Frequently Asked Questions ==
 
@@ -62,10 +63,10 @@ No. It simply renames the plugin or theme folder by appending `.off` (e.g., `plu
 == Changelog ==
 
 = 1.1.0 =
-*   Added Debug Log Viewer to the rescue interface.
-*   Added ability to enable `WP_DEBUG_LOG` via a secure cookie.
-*   Improved security and sanitization.
-*   Added internationalization support.
+*   Added Debug Log Viewer with runtime error logging capability.
+*   Migrated activity logs to the database for security and compliance.
+*   Added manual "Fail-Safe Mode" setup to comply with WordPress.org guidelines.
+*   Improved security, sanitization, and internationalization support.
 
 = 1.0.0 =
 *   Initial release.
